@@ -1,0 +1,99 @@
+# ----------------------
+# Python
+# ----------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ----------------------
+# Virtual Environment
+# ----------------------
+venv/
+env/
+ENV/
+.venv/
+
+# ----------------------
+# Environment Variables
+# ----------------------
+.env
+.env.*
+*.env
+
+# ----------------------
+# Logs
+# ----------------------
+*.log
+logs/
+
+# ----------------------
+# SQLite Database
+# ----------------------
+*.db
+*.sqlite3
+
+# ----------------------
+# Cache
+# ----------------------
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ----------------------
+# VS Code
+# ----------------------
+.vscode/
+
+# ----------------------
+# PyCharm
+# ----------------------
+.idea/
+
+# ----------------------
+# OS Files
+# ----------------------
+.DS_Store
+Thumbs.db
+
+# ----------------------
+# FastAPI Specific
+# ----------------------
+*.pid
+*.seed
+
+# ----------------------
+# Docker (if used)
+# ----------------------
+docker-compose.override.yml
+
+# ----------------------
+# Testing
+# ----------------------
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+
+# ----------------------
+# Jupyter Notebook
+# ----------------------
+.ipynb_checkpoints
