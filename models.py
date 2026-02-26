@@ -17,3 +17,10 @@ class ColorCode(Base):
     id = Column(Integer, primary_key=True, index=True)
     colour_name = Column(String)
     colour_code = Column(String)
+
+
+class CodeRaw(Base):
+    __tablename__ = "code_raw"
+
+    infurnia_code = Column(String(50), primary_key=True)
+    odoo_code     = Column(String(50))

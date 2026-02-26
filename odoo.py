@@ -2,10 +2,10 @@
 import xmlrpc.client
 
 # Odoo connection details
-url = 'https://modula12.odoo.com'
-db = 'modula12'
-username = 'admin@ayena.in'
-password = '1'
+url = 'https://modula.odoo.com'
+db = 'modula'
+username = 'engineering@modula.in'
+password = 'ENG@120825'
 
 # Authenticate with Odoo
 common = xmlrpc.client.ServerProxy(f'{url}/xmlrpc/2/common')
