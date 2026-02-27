@@ -15,8 +15,8 @@ app = FastAPI()
 # ✅ Adjust origins to your frontend URL
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
-    
+    allow_origins=["*"],
+    # allow_origins=["http://localhost:5173", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -52,7 +52,6 @@ async def process_xlsx(
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
-
     if not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Please upload a .xlsx file")
 
@@ -60,84 +59,42 @@ async def process_xlsx(
 
     try:
         excel_bytes = io.BytesIO(contents)
+        raw_df = pd.read_excel(excel_bytes, sheet_name=0, header=None, engine="openpyxl")
         df = pd.read_excel(excel_bytes, header=2, engine="openpyxl")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Unable to read Excel file: {e}")
 
+    # Validate required columns
     df.columns = df.columns.astype(str).str.strip()
-
     required_cols = ["Reference", "Item", "Finishes"]
     missing = [c for c in required_cols if c not in df.columns]
     if missing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Missing columns in sheet: {missing}"
-        )
-    
+        raise HTTPException(status_code=400, detail=f"Missing columns in sheet: {missing}")
 
+    # Extract Project ID from column C (index 2), row 2 (index 1)
     try:
-        # Read the first sheet and get the value from cell A2 (Project ID : <value>)
-        project_id_text = pd.read_excel(excel_bytes, sheet_name=0, header=None).iloc[1, 0]
-        # Extract the numeric Project ID using regular expression
-        project_id_match = re.search(r"Project ID\s*:\s*(\d+)", project_id_text)
-        if project_id_match:
-            project_id = project_id_match.group(1)  # This will be the Project ID (e.g., "23444")
-        else:
+        cell_value = str(raw_df.iloc[1, 2])
+        project_id_match = re.search(r"^\s*(\d+)", cell_value)
+        if not project_id_match:
             raise HTTPException(status_code=400, detail="Project ID not found in the file")
+        project_id = project_id_match.group(1)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error extracting Project ID: {e}")
 
-    crm_id = project_id  # Use this Project ID as crm_id (adjust if needed)
+    crm_id = project_id
 
     # Fetch customer and POC details using crm_id
     customer, poc = get_customer_poc(crm_id)
 
+    # Apply extraction and normalization functions
     df["Model"] = df["Item"].apply(extract_model)
     df["Shutter_Finish"] = df["Finishes"].apply(extract_shutter_finish)
-
-    
-    required_cols = ["Reference", "Item", "Finishes"]
-    missing = [c for c in required_cols if c not in df.columns]
-    if missing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Missing columns in sheet: {missing}"
-        )
-
-    try:
-        # Read the first sheet and get the value from cell A2 (Project ID : <value>)
-        project_id_text = pd.read_excel(excel_bytes, sheet_name=0, header=None).iloc[1, 0]
-        # Extract the numeric Project ID using regular expression
-        project_id_match = re.search(r"Project ID\s*:\s*(\d+)", project_id_text)
-        if project_id_match:
-            project_id = project_id_match.group(1)  # This will be the Project ID (e.g., "23444")
-        else:
-            raise HTTPException(status_code=400, detail="Project ID not found in the file")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error extracting Project ID: {e}")
-
-    crm_id = project_id  # Use this Project ID as crm_id (adjust if needed)
-
-    # Fetch customer and POC details using crm_id
-    customer, poc = get_customer_poc(crm_id)
-
-    # Applying the extraction functions for "Model" and "Shutter_Finish"
-    df["Model"] = df["Item"].apply(extract_model)
-    df["Shutter_Finish"] = df["Finishes"].apply(extract_shutter_finish)
-
-    # Fetch the "Reference" column as well
-    df["Reference"] = df["Reference"].apply(normalize_text)  # Assuming you want to normalize the text for "Reference"
+    df["Reference"] = df["Reference"].apply(normalize_text)
 
     results = []
     failed_rows = []
-
-
-    # Add customer, GST Treatment, and POC details only once
-
-
-
-
-    
 
 
     # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -150,7 +107,7 @@ async def process_xlsx(
                 "Row": index + 1,
                 "Model": model,
                 "Cabinet Position": reference,
-                "Reason": f"Colour '{finish}' not found"
+                "Reason": f"Cabinet processed but could not find colour '{finish}'"
             })
             return None
         return colour.colour_code
@@ -186,8 +143,15 @@ async def process_xlsx(
                 "Reason": "Cabinet not found in DB"
             })
             return False
+        
+
+        results.append({
+            "Order Lines/Product": model,
+            "Cabinet Position": reference,
+        })
 
         colour_code = get_colour_code(db, finish, model, index, reference, failed_rows)
+
         if not colour_code:
             return False
 
@@ -203,10 +167,10 @@ async def process_xlsx(
         #     return False
 
         # Keep model as its own row
-        results.append({
-            "Order Lines/Product": model,
-            "Cabinet Position": reference,
-        })
+        # results.append({
+        #     "Order Lines/Product": model,
+        #     "Cabinet Position": reference,
+        # })
 
         for bom in bom_lines:
             if bom:
