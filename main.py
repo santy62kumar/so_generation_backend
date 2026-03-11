@@ -39,7 +39,13 @@ def normalize_text(value):
     value = str(value).strip()
     return value if value else None
 
-
+SHUTTER_FINISH_MAPPING = {
+    "Sandalwood": "Courtyard Clay Gloss",
+    "Soundcloud": "Mistfield Gloss",
+    "Washed Earth": "Canyon Ridge Gloss",
+    "Starlight White": "Glacier Veil Gloss",
+    "Asteroid Belt": "Industrial Bay Matte",
+}
 
 def extract_model(text: str | None):
     if text is None or (isinstance(text, float) and pd.isna(text)):
@@ -48,13 +54,25 @@ def extract_model(text: str | None):
     return m.group(1) if m else None
 
 
+# def extract_shutter_finish(text: str | None):
+#     if text is None or (isinstance(text, float) and pd.isna(text)):
+#         return None
+
+#     s = str(text)
+#     m = re.search(r"Shutter.*?Finish\s*:\s*(.+?)(?:\n|$)", s, re.DOTALL)
+#     return m.group(1).strip() if m else None
+
 def extract_shutter_finish(text: str | None):
     if text is None or (isinstance(text, float) and pd.isna(text)):
         return None
 
     s = str(text)
     m = re.search(r"Shutter.*?Finish\s*:\s*(.+?)(?:\n|$)", s, re.DOTALL)
-    return m.group(1).strip() if m else None
+    if not m:
+        return None
+    
+    finish = m.group(1).strip()
+    return SHUTTER_FINISH_MAPPING.get(finish, finish)
 
 
 
@@ -165,42 +183,71 @@ async def process_xlsx(
 
     # ── Condition Processors ──────────────────────────────────────────────────────
 
-    def process_mk_model(db, model, finish, quantity, index, reference, failed_rows, results):
-        """
-        Condition 1: Model starts with 'MK-'
-        Original logic — look up cabinet, get BOM lines, append model + bom-colour_code rows.
-        """
+
+    def process_mk_model(db, model, finish, quantity, index, reference,
+                    failed_rows, results, customer_meta=None):
         cabinet = db.query(Cabinet).filter(Cabinet.cabinet_code == model).first()
         if not cabinet:
-            failed_rows.append({
-                "Row": index + 1,
-                "Model": model,
-                "Cabinet Position": reference,
-                "Reason": "Cabinet not found in DB"
-            })
+            failed_rows.append({"Row": index + 1, "Model": model,
+                                "Cabinet Position": reference,
+                                "Reason": "Cabinet not found in DB"})
             return False
 
-        results.append({
-            "Order Lines/Product": model,
-            "Cabinet Position": reference,
-            "quantity": quantity,
-        })
+        # ── First row carries customer header fields; subsequent rows are lean ─
+        first_row = {"Order Lines/Product": model,
+                    "Cabinet Position":    reference,
+                    "quantity":            quantity}
+        if customer_meta:
+            first_row.update(customer_meta)   # merges customer fields onto the product row
+
+        results.append(first_row)
 
         colour_code = get_colour_code(db, finish, model, index, reference, failed_rows)
-
         if not colour_code:
             return False
 
-        bom_lines = [cabinet.bom_line_1, cabinet.bom_line_2, cabinet.bom_line_3]
-
-        for bom in bom_lines:
+        for bom in [cabinet.bom_line_1, cabinet.bom_line_2, cabinet.bom_line_3]:
             if bom:
-                results.append({
-                    "Order Lines/Product": f"{bom}-{colour_code}",
-                    "Cabinet Position": reference,
-                    "quantity": quantity,
-                })
+                results.append({"Order Lines/Product": f"{bom}-{colour_code}",
+                                "Cabinet Position":    reference,
+                                "quantity":            quantity})
         return True
+    # def process_mk_model(db, model, finish, quantity, index, reference, failed_rows, results):
+    #     """
+    #     Condition 1: Model starts with 'MK-'
+    #     Original logic — look up cabinet, get BOM lines, append model + bom-colour_code rows.
+    #     """
+    #     cabinet = db.query(Cabinet).filter(Cabinet.cabinet_code == model).first()
+    #     if not cabinet:
+    #         failed_rows.append({
+    #             "Row": index + 1,
+    #             "Model": model,
+    #             "Cabinet Position": reference,
+    #             "Reason": "Cabinet not found in DB"
+    #         })
+    #         return False
+
+    #     results.append({
+    #         "Order Lines/Product": model,
+    #         "Cabinet Position": reference,
+    #         "quantity": quantity,
+    #     })
+
+    #     colour_code = get_colour_code(db, finish, model, index, reference, failed_rows)
+
+    #     if not colour_code:
+    #         return False
+
+    #     bom_lines = [cabinet.bom_line_1, cabinet.bom_line_2, cabinet.bom_line_3]
+
+    #     for bom in bom_lines:
+    #         if bom:
+    #             results.append({
+    #                 "Order Lines/Product": f"{bom}-{colour_code}",
+    #                 "Cabinet Position": reference,
+    #                 "quantity": quantity,
+    #             })
+    #     return True
 
 
     def process_fil_model(db, model, finish, quantity, index, reference, failed_rows, results):
@@ -239,10 +286,10 @@ async def process_xlsx(
         return True
 
 
-    def process_row(db, model, finish, quantity, index, reference, failed_rows, results):
+    def process_row(db, model, finish, quantity, index, reference, failed_rows, results, customer_meta):
         """Route to the correct handler based on model prefix."""
         if model.startswith("MK-"):
-            return process_mk_model(db, model, finish, quantity, index, reference, failed_rows, results)
+            return process_mk_model(db, model, finish, quantity, index, reference, failed_rows, results,customer_meta)
         elif model.startswith("FIL-"):
             return process_fil_model(db, model, finish, quantity, index, reference, failed_rows, results)
         else:
@@ -251,57 +298,102 @@ async def process_xlsx(
 
     # ── Main Loop ─────────────────────────────────────────────────────────────────
 
+    # ── Main loop ─────────────────────────────────────────────────────────────
     customer_written = False
     for index, row in df.iterrows():
         model     = normalize_text(row["Model"])
         finish    = normalize_text(row["Shutter_Finish"])
         reference = row["Reference"]
-        quantity  = row["Quantity"]  # Already computed via compute_quantity()
+        quantity  = row["Quantity"]
 
-        # ── Validation ────────────────────────────────────────────────────────────
+        # ── Validation ────────────────────────────────────────────────────────
         if not model:
-            failed_rows.append({
-                "Row": index + 1,
-                "Model": None,
-                "Cabinet Position": reference,
-                "Reason": "Model missing"
-            })
+            failed_rows.append({"Row": index + 1, "Model": None,
+                                "Cabinet Position": reference, "Reason": "Model missing"})
             continue
 
-        # Finish is only required for MK- and FIL- models
         if model.startswith(("MK-", "FIL-")) and not finish:
-            failed_rows.append({
-                "Row": index + 1,
-                "Model": model,
-                "Cabinet Position": reference,
-                "Reason": "Finish missing"
-            })
+            failed_rows.append({"Row": index + 1, "Model": model,
+                                "Cabinet Position": reference, "Reason": "Finish missing"})
             continue
 
-        # ── Write customer header once ─────────────────────────────────────────────
+        # ── Delegate (customer header is now written inside process_row) ───────
+        customer_meta = None
         if not customer_written:
-            results.append({
-                "Customer":            customer or "Default Customer",
-                "GST Treatment":       "Consumer",
-                "POC":                 poc or "Default POC",
-                "Cabinet Position":    reference,
-                "Tags":                "Product",
-                "Project Name":        customer or "Default Customer",
-                "Order Lines/Product": model,
-                "quantity":            quantity,
-            })
+            customer_meta = {
+                "Customer":      customer or "Default Customer",
+                "GST Treatment": "Consumer",
+                "POC":           poc or "Default POC",
+                "Tags":          "Product",
+                "Project Name":  customer or "Default Customer",
+            }
+
+        success = process_row(db, model, finish, quantity, index, reference,
+                            failed_rows, results, customer_meta)
+        if success and not customer_written:
             customer_written = True
 
-        # ── Delegate to the right processor ───────────────────────────────────────
-        process_row(db, model, finish, quantity, index, reference, failed_rows, results)
+    # customer_written = False
+    # for index, row in df.iterrows():
+    #     model     = normalize_text(row["Model"])
+    #     finish    = normalize_text(row["Shutter_Finish"])
+    #     reference = row["Reference"]
+    #     quantity  = row["Quantity"]  # Already computed via compute_quantity()
+
+    #     # ── Validation ────────────────────────────────────────────────────────────
+    #     if not model:
+    #         failed_rows.append({
+    #             "Row": index + 1,
+    #             "Model": None,
+    #             "Cabinet Position": reference,
+    #             "Reason": "Model missing"
+    #         })
+    #         continue
+
+    #     # Finish is only required for MK- and FIL- models
+    #     if model.startswith(("MK-", "FIL-")) and not finish:
+    #         failed_rows.append({
+    #             "Row": index + 1,
+    #             "Model": model,
+    #             "Cabinet Position": reference,
+    #             "Reason": "Finish missing"
+    #         })
+    #         continue
+
+    #     # ── Write customer header once ─────────────────────────────────────────────
+    #     if not customer_written:
+    #         results.append({
+    #             "Customer":            customer or "Default Customer",
+    #             "GST Treatment":       "Consumer",
+    #             "POC":                 poc or "Default POC",
+    #             "Cabinet Position":    reference,
+    #             "Tags":                "Product",
+    #             "Project Name":        customer or "Default Customer",
+    #             "Order Lines/Product": model,
+    #             "quantity":            quantity,
+    #         })
+    #         customer_written = True
+
+    #     # ── Delegate to the right processor ───────────────────────────────────────
+    #     process_row(db, model, finish, quantity, index, reference, failed_rows, results)
 
 
     output = io.BytesIO()
 
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+    COLUMN_ORDER = [
+    "Customer",
+    "GST Treatment",
+    "POC",
+    "Cabinet Position",
+    "Tags",
+    "Project Name",
+    "Order Lines/Product",
+    "quantity",
+    ]
 
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
         if results:
-            pd.DataFrame(results).to_excel(
+            pd.DataFrame(results, columns=COLUMN_ORDER).to_excel(
                 writer,
                 sheet_name="Success",
                 index=False
