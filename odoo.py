@@ -1,11 +1,13 @@
-# odoo.py
 import xmlrpc.client
-
+from dotenv import load_dotenv
+import os
 # Odoo connection details
-url = 'https://modula.odoo.com'
-db = 'modula'
-username = 'engineering@modula.in'
-password = 'ENG@120825'
+load_dotenv()
+
+url      = os.getenv('ODOO_URL')
+db       = os.getenv('ODOO_DB')
+username = os.getenv('ODOO_USERNAME')
+password = os.getenv('ODOO_PASSWORD')
 
 # Authenticate with Odoo
 common = xmlrpc.client.ServerProxy(f'{url}/xmlrpc/2/common')
