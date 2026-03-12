@@ -140,7 +140,7 @@ async def process_xlsx(
     crm_id = project_id
 
     # Fetch customer and POC details using crm_id
-    customer, poc = get_customer_poc(crm_id)
+    project_name, customer, poc = get_customer_poc(crm_id)
 
     # Apply extraction and normalization functions
     df["Model"] = df["Item"].apply(extract_model)
@@ -196,7 +196,7 @@ async def process_xlsx(
         # ── First row carries customer header fields; subsequent rows are lean ─
         first_row = {"Order Lines/Product": model,
                     "Cabinet Position":    reference,
-                    "quantity":            quantity}
+                    "Order Lines / Quantity":            quantity}
         if customer_meta:
             first_row.update(customer_meta)   # merges customer fields onto the product row
 
@@ -210,7 +210,7 @@ async def process_xlsx(
             if bom:
                 results.append({"Order Lines/Product": f"{bom}-{colour_code}",
                                 "Cabinet Position":    reference,
-                                "quantity":            quantity})
+                                "Order Lines / Quantity":            quantity})
         return True
     # def process_mk_model(db, model, finish, quantity, index, reference, failed_rows, results):
     #     """
@@ -264,7 +264,7 @@ async def process_xlsx(
         results.append({
             "Order Lines/Product": final_code,
             "Cabinet Position": reference,
-            "quantity": quantity,
+            "Order Lines / Quantity": quantity,
         })
         return True
 
@@ -281,7 +281,7 @@ async def process_xlsx(
         results.append({
             "Order Lines/Product": odoo_code,
             "Cabinet Position": reference,
-            "quantity": quantity,
+            "Order Lines / Quantity": quantity,
         })
         return True
 
@@ -324,8 +324,8 @@ async def process_xlsx(
                 "Customer":      customer or "Default Customer",
                 "GST Treatment": "Consumer",
                 "POC":           poc or "Default POC",
-                "Tags":          "Product",
-                "Project Name":  customer or "Default Customer",
+                "Tag":           "Product",
+                "Project Name":  project_name or "Default Project Name",
             }
 
         success = process_row(db, model, finish, quantity, index, reference,
@@ -385,10 +385,10 @@ async def process_xlsx(
     "GST Treatment",
     "POC",
     "Cabinet Position",
-    "Tags",
+    "Tag",
     "Project Name",
     "Order Lines/Product",
-    "quantity",
+    "Order Lines / Quantity",
     ]
 
     with pd.ExcelWriter(output, engine="openpyxl") as writer:

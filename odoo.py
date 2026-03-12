@@ -31,13 +31,14 @@ def get_customer_poc(crm_id):
           [['id', '=', crm_id]]
         ], {'fields': ['id', 
             'name', 
-            'phone', 
-            'email_from', 
-            'stage_id',
+            # 'phone',
+            'partner_id',
+            
             'x_studio_sales_poc_1',           
-            'x_studio_sales_poc_mob_no_1',    
-            'x_studio_installation_poc_no_1', 
-            'x_studio_supervisor_1' ]})
+            # 'x_studio_sales_poc_mob_no_1',    
+            # 'x_studio_installation_poc_no_1', 
+            # 'x_studio_supervisor_1' 
+            ]})
     
     if not customer_data:
         return None, None
@@ -46,7 +47,10 @@ def get_customer_poc(crm_id):
     lead = customer_data[0]  # This is the first lead in the list
 
     # Safely access the fields
-    customer = lead.get('name', 'Default Customer')  # Default if 'name' is not found
+    project_name= lead.get('name', 'Default Project Name')
+   
+    # project_name = lead.get('name', [None, 'Default Project Name'])[1]
+    customer = lead.get('partner_id', 'Default Customer')[1]  # Default if 'name' is not found
     poc = lead.get('x_studio_sales_poc_1', 'Default POC')  # Default if POC is not found
     
-    return customer, poc
+    return project_name, customer, poc
