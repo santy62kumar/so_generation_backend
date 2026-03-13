@@ -75,12 +75,12 @@ def extract_shutter_finish(text: str | None):
     return SHUTTER_FINISH_MAPPING.get(finish, finish)
 
 
-
 @app.post("/process-xlsx")
 async def process_xlsx(
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
+    
     if not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Please upload a .xlsx file")
 
@@ -149,6 +149,7 @@ async def process_xlsx(
 
     results = []
     failed_rows = []
+    
 
 
     # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -197,6 +198,10 @@ async def process_xlsx(
         first_row = {"Order Lines/Product": model,
                     "Cabinet Position":    reference,
                     "Order Lines / Quantity":            quantity}
+        
+        # if not customer_written and customer_meta:
+        #     first_row.update(customer_meta)
+        #     customer_written = True   # merges customer fields onto the product row
         if customer_meta:
             first_row.update(customer_meta)   # merges customer fields onto the product row
 
@@ -204,7 +209,7 @@ async def process_xlsx(
 
         colour_code = get_colour_code(db, finish, model, index, reference, failed_rows)
         if not colour_code:
-            return False
+            return True
 
         for bom in [cabinet.bom_line_1, cabinet.bom_line_2, cabinet.bom_line_3]:
             if bom:
@@ -212,43 +217,7 @@ async def process_xlsx(
                                 "Cabinet Position":    reference,
                                 "Order Lines / Quantity":            quantity})
         return True
-    # def process_mk_model(db, model, finish, quantity, index, reference, failed_rows, results):
-    #     """
-    #     Condition 1: Model starts with 'MK-'
-    #     Original logic — look up cabinet, get BOM lines, append model + bom-colour_code rows.
-    #     """
-    #     cabinet = db.query(Cabinet).filter(Cabinet.cabinet_code == model).first()
-    #     if not cabinet:
-    #         failed_rows.append({
-    #             "Row": index + 1,
-    #             "Model": model,
-    #             "Cabinet Position": reference,
-    #             "Reason": "Cabinet not found in DB"
-    #         })
-    #         return False
-
-    #     results.append({
-    #         "Order Lines/Product": model,
-    #         "Cabinet Position": reference,
-    #         "quantity": quantity,
-    #     })
-
-    #     colour_code = get_colour_code(db, finish, model, index, reference, failed_rows)
-
-    #     if not colour_code:
-    #         return False
-
-    #     bom_lines = [cabinet.bom_line_1, cabinet.bom_line_2, cabinet.bom_line_3]
-
-    #     for bom in bom_lines:
-    #         if bom:
-    #             results.append({
-    #                 "Order Lines/Product": f"{bom}-{colour_code}",
-    #                 "Cabinet Position": reference,
-    #                 "quantity": quantity,
-    #             })
-    #     return True
-
+    
 
     def process_fil_model(db, model, finish, quantity, index, reference, failed_rows, results):
         """
@@ -289,7 +258,7 @@ async def process_xlsx(
     def process_row(db, model, finish, quantity, index, reference, failed_rows, results, customer_meta):
         """Route to the correct handler based on model prefix."""
         if model.startswith("MK-"):
-            return process_mk_model(db, model, finish, quantity, index, reference, failed_rows, results,customer_meta)
+            return process_mk_model(db, model, finish, quantity, index, reference, failed_rows, results, customer_meta )
         elif model.startswith("FIL-"):
             return process_fil_model(db, model, finish, quantity, index, reference, failed_rows, results)
         else:
@@ -327,11 +296,23 @@ async def process_xlsx(
                 "Tag":           "Product",
                 "Project Name":  project_name or "Default Project Name",
             }
+            # customer_written = True
 
         success = process_row(db, model, finish, quantity, index, reference,
                             failed_rows, results, customer_meta)
+        
+        # if model.startswith(("MK-", "FIL-")) and not finish and not customer_written:
+        #     customer_written = True
+
         if success and not customer_written:
             customer_written = True
+
+        # if not customer_written:  # Only change customer_written if it hasn't been set yet
+        #     if model.startswith(("MK-", "FIL-")) and not finish:
+        #         customer_written = True
+
+        #     if success:
+        #         customer_written = True
 
     # customer_written = False
     # for index, row in df.iterrows():
