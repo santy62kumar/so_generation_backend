@@ -308,8 +308,8 @@ async def process_xlsx(
 
         # ── Validation ────────────────────────────────────────────────────────
         if not model:
-            failed_rows.append({"Row": index + 1, "Model": None,
-                                "Cabinet Position": reference, "Reason": "Model missing"})
+            # failed_rows.append({"Row": index + 1, "Model": None,
+            #                     "Cabinet Position": reference, "Reason": "Model missing"})
             continue
 
         if model.startswith(("MK-", "FIL-")) and not finish:
