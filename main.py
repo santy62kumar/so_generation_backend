@@ -142,6 +142,9 @@ async def process_xlsx(
     # Fetch customer and POC details using crm_id
     print(f"Fetching customer and POC details for CRM ID: {crm_id}")
     project_name, customer, poc = get_customer_poc(crm_id)
+    if project_name is None:
+        print(f"⚠️ No CRM lead found for ID: {crm_id}, skipping...")
+        
 
     # Apply extraction and normalization functions
     df["Model"] = df["Item"].apply(extract_model)

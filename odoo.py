@@ -50,7 +50,9 @@ def get_customer_poc(crm_id):
     project_name= lead.get('name', 'Default Project Name')
    
     # project_name = lead.get('name', [None, 'Default Project Name'])[1]
-    customer = lead.get('partner_id', 'Default Customer')[1]  # Default if 'name' is not found
+    # customer = lead.get('partner_id', 'Default Customer')[1]  # Default if 'name' is not found
+    partner = lead.get('partner_id', False)
+    customer = partner[1] if partner else 'Default Customer'
     poc = lead.get('x_studio_sales_poc_1', 'Default POC')  # Default if POC is not found
     # print(f"Fetched from Odoo - Project Name: {project_name}, Customer: {customer}, POC: {poc}")
     
