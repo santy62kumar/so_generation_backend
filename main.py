@@ -140,6 +140,7 @@ async def process_xlsx(
     crm_id = project_id
 
     # Fetch customer and POC details using crm_id
+    print(f"Fetching customer and POC details for CRM ID: {crm_id}")
     project_name, customer, poc = get_customer_poc(crm_id)
 
     # Apply extraction and normalization functions
