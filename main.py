@@ -119,7 +119,7 @@ async def process_xlsx(
             q = float(match.group())
             if q == 1:
                 return 1
-            return math.ceil(q / 3)
+            return math.ceil(q / 3)+1
         except (ValueError, TypeError):
             return 1  # Default to 1 if parsing fails
 
