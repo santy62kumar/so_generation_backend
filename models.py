@@ -24,3 +24,4 @@ class CodeRaw(Base):
 
     infurnia_code = Column(String(50), primary_key=True)
     odoo_code     = Column(String(50))
+

@@ -54,14 +54,6 @@ def extract_model(text: str | None):
     return m.group(1) if m else None
 
 
-# def extract_shutter_finish(text: str | None):
-#     if text is None or (isinstance(text, float) and pd.isna(text)):
-#         return None
-
-#     s = str(text)
-#     m = re.search(r"Shutter.*?Finish\s*:\s*(.+?)(?:\n|$)", s, re.DOTALL)
-#     return m.group(1).strip() if m else None
-
 def extract_shutter_finish(text: str | None):
     if text is None or (isinstance(text, float) and pd.isna(text)):
         return None
@@ -154,6 +146,34 @@ async def process_xlsx(
     results = []
     failed_rows = []
     
+
+    # ── NEW: Extract Service Charges Quantity from raw sheet ──────────────────
+    service_charge_qty = None
+    try:
+        for i, row in raw_df.iterrows():
+            for j, cell in enumerate(row):
+                if str(cell).strip() == "Service Charges":
+                    # The column-header row is 1 row below "Service Charges"
+                    header_row = raw_df.iloc[i + 1]
+                    qty_col_idx = None
+                    for col_idx, col_val in enumerate(header_row):
+                        if str(col_val).strip() == "Quantity":
+                            qty_col_idx = col_idx
+                            break
+
+                    if qty_col_idx is not None:
+                        # Data starts 2 rows below the "Service Charges" label
+                        data_row = raw_df.iloc[i + 2]
+                        raw_qty = data_row.iloc[qty_col_idx]
+                        match = re.search(r"[\d.]+", str(raw_qty))
+                        if match:
+                            service_charge_qty = float(match.group())
+                    break
+            if service_charge_qty is not None:
+                break
+    except Exception as e:
+        print(f"⚠️ Could not extract Service Charges quantity: {e}")
+    # ─────────────────────────────────────────────────────────────────────────
 
 
     # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -265,11 +285,13 @@ async def process_xlsx(
             return process_mk_model(db, model, finish, quantity, index, reference, failed_rows, results, customer_meta )
         elif model.startswith("FIL-"):
             return process_fil_model(db, model, finish, quantity, index, reference, failed_rows, results)
+        elif model.startswith("EP-"):
+            return process_fil_model(db, model, finish, quantity, index, reference, failed_rows, results)
         else:
             return process_generic_model(db, model, quantity, index, reference, failed_rows, results)
 
 
-    # ── Main Loop ─────────────────────────────────────────────────────────────────
+    
 
     # ── Main loop ─────────────────────────────────────────────────────────────
     customer_written = False
@@ -285,7 +307,7 @@ async def process_xlsx(
             #                     "Cabinet Position": reference, "Reason": "Model missing"})
             continue
 
-        if model.startswith(("MK-", "FIL-")) and not finish:
+        if model.startswith(("MK-", "FIL-", "EP-")) and not finish:
             failed_rows.append({"Row": index + 1, "Model": model,
                                 "Cabinet Position": reference, "Reason": "Finish missing"})
             continue
@@ -311,57 +333,16 @@ async def process_xlsx(
         if success and not customer_written:
             customer_written = True
 
-        # if not customer_written:  # Only change customer_written if it hasn't been set yet
-        #     if model.startswith(("MK-", "FIL-")) and not finish:
-        #         customer_written = True
 
-        #     if success:
-        #         customer_written = True
-
-    # customer_written = False
-    # for index, row in df.iterrows():
-    #     model     = normalize_text(row["Model"])
-    #     finish    = normalize_text(row["Shutter_Finish"])
-    #     reference = row["Reference"]
-    #     quantity  = row["Quantity"]  # Already computed via compute_quantity()
-
-    #     # ── Validation ────────────────────────────────────────────────────────────
-    #     if not model:
-    #         failed_rows.append({
-    #             "Row": index + 1,
-    #             "Model": None,
-    #             "Cabinet Position": reference,
-    #             "Reason": "Model missing"
-    #         })
-    #         continue
-
-    #     # Finish is only required for MK- and FIL- models
-    #     if model.startswith(("MK-", "FIL-")) and not finish:
-    #         failed_rows.append({
-    #             "Row": index + 1,
-    #             "Model": model,
-    #             "Cabinet Position": reference,
-    #             "Reason": "Finish missing"
-    #         })
-    #         continue
-
-    #     # ── Write customer header once ─────────────────────────────────────────────
-    #     if not customer_written:
-    #         results.append({
-    #             "Customer":            customer or "Default Customer",
-    #             "GST Treatment":       "Consumer",
-    #             "POC":                 poc or "Default POC",
-    #             "Cabinet Position":    reference,
-    #             "Tags":                "Product",
-    #             "Project Name":        customer or "Default Customer",
-    #             "Order Lines/Product": model,
-    #             "quantity":            quantity,
-    #         })
-    #         customer_written = True
-
-    #     # ── Delegate to the right processor ───────────────────────────────────────
-    #     process_row(db, model, finish, quantity, index, reference, failed_rows, results)
-
+    if service_charge_qty is not None:
+        results.append({
+            "Cabinet Position":       "B2C Installation Service",
+            "Order Lines/Product":    "SR-0001",
+            "Order Lines / Quantity": service_charge_qty,
+        })
+    else:
+        print("⚠️ Service charge quantity not found; skipping SR-0001 row.")
+    
 
     output = io.BytesIO()
 
