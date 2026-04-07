@@ -235,7 +235,7 @@ async def process_xlsx(
         if not colour_code:
             return True
 
-        for bom in [cabinet.bom_line_1, cabinet.bom_line_2, cabinet.bom_line_3]:
+        for bom in [cabinet.bom_line_1, cabinet.bom_line_2, cabinet.bom_line_3, cabinet.bom_line_4]:
             if bom:
                 results.append({"Order Lines/Product": f"{bom}-{colour_code}",
                                 "Cabinet Position":    reference,

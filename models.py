@@ -9,6 +9,7 @@ class Cabinet(Base):
     bom_line_1 = Column(String)
     bom_line_2 = Column(String)
     bom_line_3 = Column(String)
+    bom_line_4 = Column(String)   # ✅ new column added
 
 
 class ColorCode(Base):
