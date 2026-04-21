@@ -798,6 +798,9 @@ async def process_xlsx(
                     "Order Lines / Quantity":   quantity,
                 })
         return True
+    
+
+    _P_FIL_MODELS = {"P1725-AA", "P1724-AA", "P1723-AA", "P1722-AA"}
 
     def process_fil_model(db, model, finish, quantity, index, reference, failed_rows, results):
         colour_code = get_colour_code(db, finish, model, index, reference, failed_rows)
@@ -840,6 +843,19 @@ async def process_xlsx(
         elif model.startswith("EP-"):
             return process_fil_model(db, model, finish, quantity, index, reference,
                                      failed_rows, results)
+        
+
+        elif model in _P_FIL_MODELS:                          # ← new branch
+            success = process_fil_model(db, model, finish, quantity, index, reference,
+                                    failed_rows, results)
+            if success:                                        # only append if FIL succeeded
+                results.append({
+                    "Order Lines/Product":     "M-CF-217",
+                    "Order Lines/Description": "[M-CF-217]",
+                    "Cabinet Position":        reference,
+                    "Order Lines / Quantity":  quantity,
+                })
+            return success
         else:
             return process_generic_model(db, model, quantity, index, reference,
                                          failed_rows, results)
