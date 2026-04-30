@@ -757,11 +757,49 @@ async def process_xlsx(
 
     # ── Condition Processors ──────────────────────────────────────────────────
 
+    light_cabinet = [
+    "MK-0619", "MK-0946", "MK-0469", "MK-0940", "MK-0620", "MK-0947",
+    "MK-0614", "MK-0941", "MK-0621", "MK-0948", "MK-0470", "MK-0942",
+    "MK-0697", "MK-0969", "MK-0626", "MK-0965", "MK-0465", "MK-0972",
+    "MK-0714", "MK-0971", "MK-0616", "MK-0954", "MK-0615", "MK-0943",
+    "MK-0462", "MK-0968", "MK-0625", "MK-0966", "MK-1071", "MK-1070",
+    "MK-1068", "MK-1069", "MK-0617", "MK-0955", "MK-1072", "MK-0979",
+    "MK-0810", "MK-0975", "MK-0455", "MK-0944", "MK-0458", "MK-0970",
+    "MK-0457", "MK-0974", "MK-0522", "MK-0973", "MK-0523", "MK-0967"
+    ]
 
+
+
+    def get_psu_line(cnt):
+        """Return the PSU product line dict based on light cabinet count."""
+        if 1 <= cnt <= 4:
+            product = "PSU2-2460"
+            qty = 1
+        elif 5 <= cnt <= 6:
+            product = "PSU3-2465"
+            qty = 1
+        elif 7 <= cnt <= 8:
+            product = "PSU2-2460"
+            qty = 2
+        else:  # cnt >= 9
+            product = "PSU3-2465"
+            qty = 2
+
+        return {
+            "Order Lines/Product":     product,
+            "Order Lines/Description": product,
+            # "Cabinet Position":        "",
+            "Order Lines / Quantity":  qty,
+        }
     
 
     def process_mk_model(db, model, finish, quantity, index, reference,
-                         failed_rows, results, customer_meta=None):
+                         failed_rows, results, customer_meta=None, light_cabinet_count=None):
+        
+        if model in light_cabinet:
+            if light_cabinet_count is not None:
+                light_cabinet_count[0] += 1
+
         cabinet = db.query(Cabinet).filter(Cabinet.cabinet_code == model).first()
         if not cabinet:
             failed_rows.append({
@@ -809,52 +847,77 @@ async def process_xlsx(
 
     _P_FIL_MODELS = {"P1725-AA", "P1724-AA", "P1723-AA", "P1722-AA"}
 
-    def process_fil_model(db, model, finish, quantity, index, reference, failed_rows, results):
+    def process_fil_model(db, model, finish, quantity, index, reference, failed_rows, results, customer_meta=None):
         colour_code = get_colour_code(db, finish, model, index, reference, failed_rows)
         if not colour_code:
             return False
 
         product = f"{model}-{colour_code}"
-        results.append({
+        first_row = {
             "Order Lines/Product":      product,
             # FIL / EP line: [product_code] (finish_name)
             "Order Lines/Description":  f"[{product}] ({finish})",
             "Cabinet Position":         reference,
             "Order Lines / Quantity":   quantity,
-        })
+        }
+
+
+        if customer_meta:
+            first_row.update(customer_meta)
+
+        results.append(first_row)
         return True
 
-    def process_generic_model(db, model, quantity, index, reference, failed_rows, results):
+    def process_generic_model(db, model, quantity, index, reference, failed_rows, results, customer_meta=None):
         odoo_code = get_odoo_code(db, model, index, reference, failed_rows)
         if not odoo_code:
             return False
 
-        results.append({
+        first_row = {
             "Order Lines/Product":      odoo_code,
             # Generic row: [product_code] — no finish
             "Order Lines/Description":  f"[{odoo_code}]",
             "Cabinet Position":         reference,
             "Order Lines / Quantity":   quantity,
-        })
+        }
+
+        if customer_meta:
+            first_row.update(customer_meta)
+
+        results.append(first_row)
         return True
+    
+
+    light_cabinet_count = [0]
+
+    _MK_FIL_MODELS = {
+    "MK-0777", "MK-1145", "MK-0766", "MK-0834",
+    "MK-0775", "MK-0835", "MK-0725", "MK-0836"
+    }
 
     def process_row(db, model, finish, quantity, index, reference,
-                    failed_rows, results, customer_meta):
+                    failed_rows, results,customer_meta,  light_cabinet_count,):
         """Route to the correct handler based on model prefix."""
+
+
         if model.startswith("MK-"):
+            if model in _MK_FIL_MODELS:
+                return process_fil_model(db, model, finish, quantity, index, reference,
+                                        failed_rows, results, customer_meta)
             return process_mk_model(db, model, finish, quantity, index, reference,
-                                    failed_rows, results, customer_meta)
+                        failed_rows, results, customer_meta, light_cabinet_count=light_cabinet_count)
+
         elif model.startswith("FIL-"):
             return process_fil_model(db, model, finish, quantity, index, reference,
-                                     failed_rows, results)
+                                     failed_rows, results, customer_meta)
         elif model.startswith("EP-"):
             return process_fil_model(db, model, finish, quantity, index, reference,
-                                     failed_rows, results)
+                                     failed_rows, results, customer_meta)
         
 
         elif model in _P_FIL_MODELS:                          # ← new branch
             success = process_fil_model(db, model, finish, quantity, index, reference,
-                                    failed_rows, results)
+                                    failed_rows, results, customer_meta)
             if success:                                        # only append if FIL succeeded
                 results.append({
                     "Order Lines/Product":     "M-CF-217",
@@ -865,11 +928,13 @@ async def process_xlsx(
             return success
         else:
             return process_generic_model(db, model, quantity, index, reference,
-                                         failed_rows, results)
+                                         failed_rows, results, customer_meta)
 
     # ── Main loop ─────────────────────────────────────────────────────────────
     customer_written = False
     prelam_pending   = []  # [{result_idx, finish, mk_product, row, reference}]
+
+    
 
     for index, row in df.iterrows():
         model     = normalize_text(row["Model"])
@@ -901,10 +966,11 @@ async def process_xlsx(
                 "Tag":           "Product",
                 "Project Name":  project_name or "Default Project Name",
             }
+            
 
         before_idx = len(results)
         success = process_row(db, model, finish, quantity, index, reference,
-                              failed_rows, results, customer_meta)
+                              failed_rows, results,customer_meta,  light_cabinet_count)
 
         if success and not customer_written:
             customer_written = True
@@ -949,6 +1015,12 @@ async def process_xlsx(
         })
     else:
         print("Service charge quantity not found; skipping SR-0001 row.")
+
+
+    cnt = light_cabinet_count[0]
+    if cnt >= 1:
+        psu_row = get_psu_line(cnt)
+        results.append(psu_row)
 
     # ── Build output workbook ─────────────────────────────────────────────────
     output = io.BytesIO()
