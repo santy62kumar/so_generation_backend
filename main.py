@@ -544,6 +544,16 @@ PRELAM_FINISHES = {
     "Fluted Glass Black Gloss (Prelam)",
     "Sandwich Glass Bronze Veil (Prelam)",
     "Frosted Glass Mist (Prelam)",
+    "Fluted Glass Ridge (Prelam)",
+    "Fluted Glass Fine Ridge (Prelam)",
+    "Textured Glass Glacier (Prelam)",
+    "Clear Glass (Prelam)",
+    "Black Tinted Glass (Prelam)",
+    "Clear Fluted Glass (Prelam)"
+
+
+
+
 }
 
 # Maps glass-shutter model codes -> human-readable profile description
