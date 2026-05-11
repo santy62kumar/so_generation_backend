@@ -223,9 +223,11 @@ def process_mk_model(db, model, finish, quantity, index, reference,
         })
         return False
 
+    description = cabinet.description if cabinet.description else model
+    
     first_row = {
         "Order Lines/Product":     model,
-        "Order Lines/Description": model,
+        "Order Lines/Description": description,
         "Cabinet Position":        reference,
         "Order Lines / Quantity":  quantity,
     }

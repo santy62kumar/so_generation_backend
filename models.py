@@ -6,6 +6,7 @@ class Cabinet(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     cabinet_code = Column(String)
+    description = Column(String(100))
     bom_line_1 = Column(String)
     bom_line_2 = Column(String)
     bom_line_3 = Column(String)
