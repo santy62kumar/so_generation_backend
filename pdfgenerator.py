@@ -345,14 +345,24 @@ async def generate_pdf(data: dict) -> bytes:
 
 
 
-def generate_pdf_sync(data: dict) -> bytes:
-    """
-    Thread-safe entry point called from uvicorn's route.
-    Spins up a brand-new ProactorEventLoop in a background thread
-    so Playwright can spawn Chromium regardless of uvicorn's own loop.
-    """
-    loop = asyncio.ProactorEventLoop()
+# def generate_pdf_sync(data: dict) -> bytes:
+#     """
+#     Thread-safe entry point called from uvicorn's route.
+#     Spins up a brand-new ProactorEventLoop in a background thread
+#     so Playwright can spawn Chromium regardless of uvicorn's own loop.
+#     """
+#     loop = asyncio.ProactorEventLoop()
+#     try:
+#         return loop.run_until_complete(generate_pdf(data))
+#     finally:
+#         loop.close()
+
+
+def generate_pdf_sync(*args, **kwargs):
+    # Works on both Linux and Windows
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     try:
-        return loop.run_until_complete(generate_pdf(data))
+        return loop.run_until_complete(generate_pdf(*args, **kwargs))
     finally:
         loop.close()
