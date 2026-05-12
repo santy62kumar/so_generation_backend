@@ -193,7 +193,7 @@ SLIDES: list[dict] = [
     {"asset": "3.jpg",  "build": lambda d: ""},
 
     # Slides 3-4 – Static
-    {"asset": "4.jpeg",  "build": lambda d: ""},
+    {"asset": "4.jpg",  "build": lambda d: ""},
     {"asset": "5.jpg",  "build": lambda d: ""},
 
     # Slide 5 – Layout plan (dynamic grid)
