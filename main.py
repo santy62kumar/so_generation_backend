@@ -381,6 +381,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from sogeneration import handle_process_xlsx
 from pdfgenerator import generate_pdf_sync          # ← sync wrapper, not generate_pdf
+from warrantygenerator import generate_warranty_pdf_sync 
 
 import os
 from dotenv import load_dotenv
@@ -471,3 +472,60 @@ async def generate_pdf_route(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="Modula_Kitchen_{safe_name}.pdf"'},
     )
+
+
+
+@app.post("/generate-warranty")
+async def generate_warranty_route(
+    customerName:  str = Form(default=""),
+    contactNumber: str = Form(default=""),
+    orderId:       str = Form(default=""),
+    address:       str = Form(default=""),
+    pinCode:       str = Form(default=""),
+    issuedBy:      str = Form(default=""),
+    handoverDate:  str = Form(default=""),
+):
+    """
+    Generate a Warranty Card PDF.
+ 
+    Form fields
+    ───────────
+    customerName   – Customer's full name
+    contactNumber  – Phone / mobile number
+    orderId        – Sales / work-order ID
+    address        – Installation address
+    pinCode        – PIN / postal code
+    issuedBy       – Staff member issuing the card
+    handoverDate   – Date of handover  (e.g. "12 May 2026")
+    """
+    warranty_data = {
+        "customerName":  customerName,
+        "contactNumber": contactNumber,
+        "orderId":       orderId,
+        "address":       address,
+        "pinCode":       pinCode,
+        "issuedBy":      issuedBy,
+        "handoverDate":  handoverDate,
+    }
+ 
+    loop = asyncio.get_event_loop()
+    pdf_buffer = await loop.run_in_executor(
+        _thread_pool,
+        generate_warranty_pdf_sync,
+        warranty_data,
+    )
+ 
+    safe_name = re.sub(r"[^a-zA-Z0-9 ]", "", customerName).replace(" ", "_") or "Customer"
+ 
+    return StreamingResponse(
+        io.BytesIO(pdf_buffer),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="Modula_Warranty_{safe_name}.pdf"'
+        },
+    )
+ 
+ 
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
