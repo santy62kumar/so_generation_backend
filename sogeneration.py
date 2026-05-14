@@ -256,12 +256,74 @@ def process_mk_model(db, model, finish, quantity, index, reference,
     return True
 
 
+# def process_fil_model(db, model, finish, quantity, index, reference,
+#                       failed_rows, results, customer_meta=None):
+#     colour_code = get_colour_code(db, finish, model, index, reference, failed_rows)
+#     if not colour_code:
+#         return False
+
+#     product = f"{model}-{colour_code}"
+#     first_row = {
+#         "Order Lines/Product":     product,
+#         "Order Lines/Description": f"[{product}] ({finish})",
+#         "Cabinet Position":        reference,
+#         "Order Lines / Quantity":  quantity,
+#     }
+#     if customer_meta:
+#         first_row.update(customer_meta)
+
+#     results.append(first_row)
+#     return True
+
+
+# ── Filler model → category lookup (from filler reference sheet) ─────────────
+LC_FILLERS = {
+    "FIL-0001", "FIL-0002", "FIL-0003",
+    "FIL-0043", "FIL-0044", "FIL-0045",
+}
+
+UC_FILLERS = {
+    "FIL-0004", "FIL-0005", "FIL-0006", "FIL-0007",
+    "FIL-0008", "FIL-0009", "FIL-0058", "FIL-0059",
+    "FIL-0060", "FIL-0061",
+}
+
+LOFT_FILLERS = {
+    "FIL-0010", "FIL-0011", "FIL-0012", "FIL-0013", "FIL-0014",
+    "FIL-0015", "FIL-0016", "FIL-0017", "FIL-0018", "FIL-0019",
+    "FIL-0020", "FIL-0021", "FIL-0022", "FIL-0023", "FIL-0024",
+    "FIL-0025", "FIL-0026", "FIL-0027", "FIL-0028", "FIL-0029",
+    "FIL-0030", "FIL-0037", "FIL-0038", "FIL-0039", "FIL-0040",
+    "FIL-0041", "FIL-0042", "FIL-0046", "FIL-0047", "FIL-0048",
+    "FIL-0049", "FIL-0050", "FIL-0051", "FIL-0052", "FIL-0053",
+    "FIL-0054", "FIL-0055", "FIL-0056", "FIL-0057",
+}
+
+# Extra filler codes injected per category (qty 1 each)
+FILLER_EXTRAS = {
+    "LC":   ["FIL-0001"],
+    "UC":   ["FIL-0001", "FIL-0005"],
+    "Loft": ["FIL-0056"],
+}
+
+def get_cabinet_category(model):
+    """Return LC / UC / Loft for a filler model, or None if not recognised."""
+    if model in LC_FILLERS:
+        return "LC"
+    if model in UC_FILLERS:
+        return "UC"
+    if model in LOFT_FILLERS:
+        return "Loft"
+    return None
+
+
 def process_fil_model(db, model, finish, quantity, index, reference,
                       failed_rows, results, customer_meta=None):
     colour_code = get_colour_code(db, finish, model, index, reference, failed_rows)
     if not colour_code:
         return False
 
+    # ── Primary line item ────────────────────────────────────────────
     product = f"{model}-{colour_code}"
     first_row = {
         "Order Lines/Product":     product,
@@ -271,8 +333,23 @@ def process_fil_model(db, model, finish, quantity, index, reference,
     }
     if customer_meta:
         first_row.update(customer_meta)
-
     results.append(first_row)
+
+    # ── Extra filler line items based on cabinet category ────────────
+    category = get_cabinet_category(model)
+    if category:
+        for filler_code in FILLER_EXTRAS[category]:
+            extra_product = f"{filler_code}-AD"
+            extra_row = {
+                "Order Lines/Product":     extra_product,
+                "Order Lines/Description": f"[{extra_product}] (Glacier Veil Matte)",
+                "Cabinet Position":        reference,
+                "Order Lines / Quantity":  1,
+            }
+            if customer_meta:
+                extra_row.update(customer_meta)
+            results.append(extra_row)
+
     return True
 
 
