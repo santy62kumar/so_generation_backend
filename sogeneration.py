@@ -12,6 +12,7 @@ import math
 
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
+processed_categories = set()
 
 def normalize_text(value):
     if value is None or pd.isna(value):
@@ -302,7 +303,7 @@ LOFT_FILLERS = {
 # Extra filler codes injected per category (qty 1 each)
 FILLER_EXTRAS = {
     "LC":   ["FIL-0001"],
-    "UC":   ["FIL-0001", "FIL-0005"],
+    "UC":   ["FIL-0005"],
     "Loft": ["FIL-0056"],
 }
 
@@ -317,8 +318,44 @@ def get_cabinet_category(model):
     return None
 
 
+# def process_fil_model(db, model, finish, quantity, index, reference,
+#                       failed_rows, results, customer_meta=None):
+#     colour_code = get_colour_code(db, finish, model, index, reference, failed_rows)
+#     if not colour_code:
+#         return False
+
+#     # ── Primary line item ────────────────────────────────────────────
+#     product = f"{model}-{colour_code}"
+#     first_row = {
+#         "Order Lines/Product":     product,
+#         "Order Lines/Description": f"[{product}] ({finish})",
+#         "Cabinet Position":        reference,
+#         "Order Lines / Quantity":  quantity,
+#     }
+#     if customer_meta:
+#         first_row.update(customer_meta)
+#     results.append(first_row)
+
+#     # ── Extra filler line items based on cabinet category ────────────
+#     category = get_cabinet_category(model)
+#     if category:
+#         for filler_code in FILLER_EXTRAS[category]:
+#             extra_product = f"{filler_code}-AD"
+#             extra_row = {
+#                 "Order Lines/Product":     extra_product,
+#                 "Order Lines/Description": f"[{extra_product}] (Glacier Veil Matte)",
+#                 "Cabinet Position":        reference,
+#                 "Order Lines / Quantity":  1,
+#             }
+#             if customer_meta:
+#                 extra_row.update(customer_meta)
+#             results.append(extra_row)
+
+#     return True
+
 def process_fil_model(db, model, finish, quantity, index, reference,
                       failed_rows, results, customer_meta=None):
+    """Process a filler model and append extra fillers per unique category only once."""
     colour_code = get_colour_code(db, finish, model, index, reference, failed_rows)
     if not colour_code:
         return False
@@ -337,8 +374,8 @@ def process_fil_model(db, model, finish, quantity, index, reference,
 
     # ── Extra filler line items based on cabinet category ────────────
     category = get_cabinet_category(model)
-    if category:
-        for filler_code in FILLER_EXTRAS[category]:
+    if category and category not in processed_categories:
+        for filler_code in FILLER_EXTRAS.get(category, []):
             extra_product = f"{filler_code}-AD"
             extra_row = {
                 "Order Lines/Product":     extra_product,
@@ -349,6 +386,7 @@ def process_fil_model(db, model, finish, quantity, index, reference,
             if customer_meta:
                 extra_row.update(customer_meta)
             results.append(extra_row)
+        processed_categories.add(category)
 
     return True
 
