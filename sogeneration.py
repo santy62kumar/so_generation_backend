@@ -172,11 +172,35 @@ def get_psu_line(cnt):
     else:
         product, qty = "PSU3-2465", 2
 
-    return {
-        "Order Lines/Product":     product,
-        "Order Lines/Description": product,
-        "Order Lines / Quantity":  qty,
-    }
+    # return {
+    #     "Order Lines/Product":     product,
+    #     "Order Lines/Description": product,
+    #     "Order Lines / Quantity":  qty,
+    # }
+
+    lines = [
+        {
+            "Order Lines/Product": product,
+            "Order Lines/Description": product,
+            "Order Lines / Quantity": qty,
+        }
+    ]
+
+    # Add extra items if PSU qty > 1
+    if cnt > 1:
+        lines.append({
+            "Order Lines/Product": "L-EC2",
+            "Order Lines/Description": "L-EC2",
+            "Order Lines / Quantity": 1,
+        })
+
+        lines.append({
+            "Order Lines/Product": "PR-048",
+            "Order Lines/Description": "PR-048",
+            "Order Lines / Quantity": 1,
+        })
+
+    return lines
 
 
 # ── DB lookups ────────────────────────────────────────────────────────────────
@@ -661,9 +685,13 @@ async def handle_process_xlsx(file: UploadFile, db: Session):
         print("Service charge quantity not found; skipping SR-0001 row.")
 
     # ── PSU row ───────────────────────────────────────────────────────────────
+    # cnt = light_cabinet_count[0]
+    # if cnt >= 1:
+    #     results.append(get_psu_line(cnt))
+
     cnt = light_cabinet_count[0]
     if cnt >= 1:
-        results.append(get_psu_line(cnt))
+        results.extend(get_psu_line(cnt))
 
     # ── Build output workbook ─────────────────────────────────────────────────
     output = io.BytesIO()
