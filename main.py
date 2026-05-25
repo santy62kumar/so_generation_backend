@@ -378,6 +378,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 
+
+
+
 from database import get_db
 from sogeneration import handle_process_xlsx
 from pdfgenerator import generate_pdf_sync          # ← sync wrapper, not generate_pdf
@@ -385,6 +388,7 @@ from warrantygenerator import generate_warranty_pdf_sync
 
 import os
 from dotenv import load_dotenv
+
 
 load_dotenv()
 
@@ -402,6 +406,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 
 # ── Route 1: SO Generation ─────────────────────────────────────────────────────

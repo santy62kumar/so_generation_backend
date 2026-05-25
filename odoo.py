@@ -25,26 +25,64 @@ def get_customer_poc(crm_id):
     """
     Fetches the customer and POC (Point of Contact) from Odoo using the crm_id.
     """
-    customer_data = models.execute_kw(db, uid, password,
-                                      'crm.lead', 'search_read',
-                                      [
-          [['id', '=', crm_id]]
-        ], {'fields': ['id', 
-            'name', 
-            # 'phone',
-            'partner_id',
-            'x_studio_sales_poc_1',           
-            # 'x_studio_sales_poc_mob_no_1',    
-            # 'x_studio_installation_poc_no_1', 
-            # 'x_studio_supervisor_1' 
-            ]})
+    # customer_data = models.execute_kw(db, uid, password,
+    #                                   'crm.lead', 'search_read',
+    #                                   [
+    #       [['id', '=', crm_id]]
+    #     ], {'fields': ['id', 
+    #         'name', 
+    #         # 'phone',
+    #         'partner_id',
+    #         'x_studio_sales_poc_1',           
+    #         # 'x_studio_sales_poc_mob_no_1',    
+    #         # 'x_studio_installation_poc_no_1', 
+    #         # 'x_studio_supervisor_1' 
+    #         ]})
     
+    # if not customer_data:
+    #     return None, None, None
+
+
+    # if str(crm_id).isdigit():
+    #     search_domain = [['id', '=', int(crm_id)]]
+    # else:
+    #     search_domain = [['x_studio_custom_id', '=', str(crm_id)]]
+
+    # print(f"crm_id received: '{crm_id}' | isdigit: {str(crm_id).isdigit()}")  # 👈 add this
+
+    if str(crm_id).isdigit():
+        search_domain = [['id', '=', int(crm_id)]]
+    else:
+        search_domain = [['x_studio_custom_id', '=', str(crm_id)]]
+
+    # print(f"search_domain: {search_domain}") 
+
+    customer_data = models.execute_kw(db, uid, password,
+                                    'crm.lead', 'search_read',
+                                    [search_domain],   # ✅ single wrap
+                                    {'fields': ['id',
+                                        'name',
+                                        'partner_id',
+                                        'x_studio_sales_poc_1',
+                                    ]})
+
+    # Fallback to custom_id if id search returned nothing
+    if not customer_data and str(crm_id).isdigit():
+        customer_data = models.execute_kw(db, uid, password,
+                                        'crm.lead', 'search_read',
+                                        [[['x_studio_custom_id', '=', str(crm_id)]]],
+                                        {'fields': ['id',
+                                            'name',
+                                            'partner_id',
+                                            'x_studio_sales_poc_1',
+                                        ]})
+
     if not customer_data:
         return None, None, None
 
     # Access the first item from the list returned by search_read
     lead = customer_data[0]  # This is the first lead in the list
-    print(f"Fetched Lead Data: {lead}")  # Debugging statement to check the structure of the lead data
+    # print(f"Fetched Lead Data: {lead}")  # Debugging statement to check the structure of the lead data
 
     # Safely access the fields
     project_name= lead.get('name', 'Default Project Name')

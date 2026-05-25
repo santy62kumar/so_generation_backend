@@ -517,22 +517,40 @@ async def handle_process_xlsx(file: UploadFile, db: Session):
     df["Quantity"] = df[quantity_col].apply(compute_quantity)
 
     # ── Project ID ────────────────────────────────────────────────────────────
+    # try:
+    #     cell_value       = str(raw_df.iloc[1, 2])
+    #     project_id_match = re.search(r"^\s*(\d+)", cell_value)
+    #     if not project_id_match:
+    #         raise HTTPException(status_code=400, detail="Project ID not found in the file")
+    #     project_id = project_id_match.group(1)
+    # except HTTPException:
+    #     raise
+    # except Exception as e:
+    #     raise HTTPException(status_code=400, detail=f"Error extracting Project ID: {e}")
+
+    # crm_id = project_id
+
     try:
-        cell_value       = str(raw_df.iloc[1, 2])
-        project_id_match = re.search(r"^\s*(\d+)", cell_value)
-        if not project_id_match:
+        cell_value = str(raw_df.iloc[1, 2]).strip()
+        
+        # Extract just the first line (the project ID)
+        first_line = cell_value.splitlines()[0].strip()
+        
+        if not first_line:
             raise HTTPException(status_code=400, detail="Project ID not found in the file")
-        project_id = project_id_match.group(1)
+        
+        project_id = first_line  # "25-E-26-0016"
+        
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error extracting Project ID: {e}")
 
     crm_id = project_id
-    print(f"Fetching customer and POC details for CRM ID: {crm_id}")
+    # print(f"Fetching customer and POC details for CRM ID: {crm_id}")
     project_name, customer, poc = get_customer_poc(crm_id)
-    if project_name is None:
-        print(f"No CRM lead found for ID: {crm_id}, skipping...")
+    # if project_name is None:
+    #     print(f"No CRM lead found for ID: {crm_id}, skipping...")
 
     # ── Derive columns ────────────────────────────────────────────────────────
     df["Model"]          = df["Item"].apply(extract_model)
