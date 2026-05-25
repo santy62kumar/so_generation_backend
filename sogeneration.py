@@ -209,8 +209,17 @@ def get_odoo_code(db, model, index, reference, failed_rows):
 
 # ── Condition Processors ──────────────────────────────────────────────────────
 
+tt_color = None
+
 def process_mk_model(db, model, finish, quantity, index, reference,
                      failed_rows, results, customer_meta=None, light_cabinet_count=None):
+    
+    global tt_color
+    tt_color = None
+    processed_categories.clear()
+
+    
+
     if model in LIGHT_CABINET:
         if light_cabinet_count is not None:
             light_cabinet_count[0] += 1
@@ -243,6 +252,10 @@ def process_mk_model(db, model, finish, quantity, index, reference,
     colour_code = get_colour_code(db, finish, model, index, reference, failed_rows)
     if not colour_code:
         return True
+
+    is_lc_model = "LC" in description
+    if is_lc_model and tt_color is None:
+        tt_color = colour_code
 
     for i in range(1, 14):
         bom = getattr(cabinet, f"bom_line_{i}")
@@ -412,7 +425,7 @@ def process_generic_model(db, model, quantity, index, reference,
 
 def process_row(db, model, finish, quantity, index, reference,
                 failed_rows, results, customer_meta, light_cabinet_count):
-    if model.startswith("MK-"):
+    if model.startswith(("MK-", "CK-2.0")):
         if model in _MK_FIL_MODELS:
             return process_fil_model(db, model, finish, quantity, index, reference,
                                      failed_rows, results, customer_meta)
@@ -586,6 +599,7 @@ async def handle_process_xlsx(file: UploadFile, db: Session):
                 "mk_product": results[before_idx]["Order Lines/Product"],
                 "row":        index + 1,
                 "reference":  reference,
+                "colour_code": tt_color,
             })
 
     # ── Post-loop: patch glass description onto MK-prelam rows ───────────────
@@ -598,14 +612,42 @@ async def handle_process_xlsx(file: UploadFile, db: Session):
                     "Cabinet Position": item["reference"],
                     "Reason":           "Prelam finish found but no glass-shutter profile model row exists in the sheet",
                 })
+        # else:
+        #     glass_model = glass_shutter_found[0]
+        #     for item in prelam_pending:
+        #         results[item["result_idx"]]["Order Lines/Description"] = (
+        #             build_glass_shutter_description(
+        #                 item["mk_product"], glass_model, item["finish"]
+        #             )
+        #         )
+        
         else:
             glass_model = glass_shutter_found[0]
             for item in prelam_pending:
+                # Update the description with glass shutter
                 results[item["result_idx"]]["Order Lines/Description"] = (
                     build_glass_shutter_description(
                         item["mk_product"], glass_model, item["finish"]
                     )
                 )
+
+                # ── Fetch BOM lines from DB ─────────────────────────────
+                cabinet = db.query(Cabinet).filter(Cabinet.cabinet_code == item["mk_product"]).first()
+                if cabinet:
+                    insert_idx = item["result_idx"] + 1
+                    colour_code = item.get("colour_code", None)  # Use if available
+                    for i in range(1, 14):  # bom_line_1 → bom_line_13
+                        bom = getattr(cabinet, f"bom_line_{i}")
+                        if bom:
+                            product = f"{bom}-{colour_code}" if colour_code else bom
+                            bom_row = {
+                                "Order Lines/Product":     product,
+                                "Order Lines/Description": f"[{product}]",
+                                "Cabinet Position":        item["reference"],
+                                "Order Lines / Quantity":  1,
+                            }
+                            results.insert(insert_idx, bom_row)
+                            insert_idx += 1
 
     # ── Service charge row ────────────────────────────────────────────────────
     if service_charge_qty is not None:
