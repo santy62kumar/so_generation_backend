@@ -47,6 +47,7 @@ PRELAM_FINISHES = {
     "Fluted Glass Caramel Gloss (Prelam)",
     "Fluted Glass Black Gloss (Prelam)",
     "Sandwich Glass Bronze Veil (Prelam)",
+    "Sandwich Glass Bronze Grid (Prelam)",
     "Frosted Glass Mist (Prelam)",
     "Fluted Glass Ridge (Prelam)",
     "Fluted Glass Fine Ridge (Prelam)",
