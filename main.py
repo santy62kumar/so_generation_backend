@@ -385,6 +385,7 @@ from database import get_db
 from sogeneration import handle_process_xlsx
 from pdfgenerator import generate_pdf_sync          # ← sync wrapper, not generate_pdf
 from warrantygenerator import generate_warranty_pdf_sync 
+from installation_report_generator import generate_installation_report_sync   # ← NEW
 
 import os
 from dotenv import load_dotenv
@@ -528,6 +529,93 @@ async def generate_warranty_route(
         headers={
             "Content-Disposition": f'attachment; filename="Modula_Warranty_{safe_name}.pdf"'
         },
+    )
+
+
+
+@app.post("/generate-installation-report")
+async def generate_installation_report_route(
+    # ── Project Information ────────────────────────────────────────────────────
+    projectName:       str = Form(default=""),
+    reportDate:        str = Form(default=""),   # "DD/MM/YYYY"; auto-fills today if blank
+    projectSupervisor: str = Form(default=""),
+    projectManager:    str = Form(default=""),
+    projectDesigner:   str = Form(default=""),
+ 
+    # ── Flexible fields ────────────────────────────────────────────────────────
+    # accomplishments: plain string  OR  JSON array string — both accepted
+    #   e.g.  "All work done"
+    #   e.g.  '["Task A","Task B"]'
+    accomplishments: str = Form(default=""),
+ 
+    # JSON array; bad JSON is silently ignored → empty list
+    completedWork: str = Form(default="[]"),
+    upcomingWork:  str = Form(default="[]"),
+ 
+    # ── Man Power ─────────────────────────────────────────────────────────────
+    numIPs:        str = Form(default=""),
+    numHelpers:    str = Form(default=""),
+    numLabour:     str = Form(default=""),
+    ipInTime:      str = Form(default=""),
+    ipOutTime:     str = Form(default=""),
+    helperInTime:  str = Form(default=""),
+    helperOutTime: str = Form(default=""),
+    labourInTime:  str = Form(default=""),
+    labourOutTime: str = Form(default=""),
+    mandays:       str = Form(default=""),
+ 
+    # ── Photos — unlimited ─────────────────────────────────────────────────────
+    photos: List[UploadFile] = File(default=[]),
+):
+    """
+    Generate a Daily Installation Report PDF.
+ 
+    • All fields optional — only non-empty values appear.
+    • accomplishments accepts a plain string or a JSON list.
+    • upcomingWork with invalid JSON is treated as empty (no crash).
+    • Photos unlimited; each gets its own page with the Modula icon top-right.
+    """
+    photo_data = []
+    for f in photos:
+        buf = await f.read()
+        if buf:
+            photo_data.append({"bytes": buf, "filename": f.filename or "photo.jpg"})
+ 
+    data = {
+        "projectName":       projectName,
+        "reportDate":        reportDate,
+        "projectSupervisor": projectSupervisor,
+        "projectManager":    projectManager,
+        "projectDesigner":   projectDesigner,
+        # raw strings — _parse_list_field inside the generator handles both formats
+        "accomplishments":   accomplishments,
+        "completedWork":     completedWork,
+        "manpower": {
+            "numIPs":         numIPs,
+            "numHelpers":     numHelpers,
+            "numLabour":      numLabour,
+            "ipInTime":       ipInTime,
+            "ipOutTime":      ipOutTime,
+            "helperInTime":   helperInTime,
+            "helperOutTime":  helperOutTime,
+            "labourInTime":   labourInTime,
+            "labourOutTime":  labourOutTime,
+            "mandays":        mandays,
+        },
+        "upcomingWork": upcomingWork,
+        "photos":       photo_data,
+    }
+ 
+    loop = asyncio.get_event_loop()
+    pdf_buffer = await loop.run_in_executor(
+        _thread_pool, generate_installation_report_sync, data
+    )
+ 
+    safe_name = re.sub(r"[^a-zA-Z0-9 ]", "", projectName).replace(" ", "_") or "Report"
+    return StreamingResponse(
+        io.BytesIO(pdf_buffer),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="Installation_Report_{safe_name}.pdf"'},
     )
  
  
