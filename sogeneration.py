@@ -242,7 +242,7 @@ def process_mk_model(db, model, finish, quantity, index, reference,
     
     global tt_color
     tt_color = None
-    processed_categories.clear()
+    # processed_categories.clear()
 
     if model in LIGHT_CABINET:
         if light_cabinet_count is not None:
