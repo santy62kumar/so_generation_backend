@@ -12,7 +12,7 @@ import math
 
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
-processed_categories = set()
+# processed_categories = set()
 
 def normalize_text(value):
     if value is None or pd.isna(value):
@@ -548,6 +548,8 @@ def process_row(db, model, finish, quantity, index, reference,
 # ── Main handler ──────────────────────────────────────────────────────────────
 
 async def handle_process_xlsx(file: UploadFile, db: Session):
+    global processed_categories
+    processed_categories = set() 
     if not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Please upload a .xlsx file")
 
