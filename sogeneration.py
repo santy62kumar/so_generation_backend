@@ -1713,11 +1713,12 @@ GLASS_SHUTTER_PROFILE_MAPPING = {
     "KSP-01 MB":  "GLASS SHUTTER PROFILE: Matt Black ( KSP-01 MB )",
     "KSP-01 MG":  "GLASS SHUTTER PROFILE: Matt Gold ( KSP-01 MG )",
     "KSP-01 SS":  "GLASS SHUTTER PROFILE: Silver ( KSP-01 SS )",
-    "BGK-01":     "GLASS SHUTTER PROFILE: Rose Gold 20 mm Profile",
-    "BGK-04":     "GLASS SHUTTER PROFILE: Gold Profile",
-    "BGK-05":     "GLASS SHUTTER PROFILE: Black Profile",
-    "BGK-07":     "GLASS SHUTTER PROFILE: Champagne Profile",
-    "BGK-06":     "GLASS SHUTTER PROFILE: Silver Profile",
+    "BGK-01":     "GLASS SHUTTER PROFILE: Rose Gold 45 mm Profile",
+    "BGK-04":     "GLASS SHUTTER PROFILE: Gold 45 mm Profile",
+    "BGK-05":     "GLASS SHUTTER PROFILE: Black 45 mm Profile",
+    "BGK-07":     "GLASS SHUTTER PROFILE: Champagne 45 mm Profile",
+    "BGK-06":     "GLASS SHUTTER PROFILE: Silver 45 mm Profile",
+    
 }
 
 GLASS_SHUTTER_MODELS = set(GLASS_SHUTTER_PROFILE_MAPPING.keys())
