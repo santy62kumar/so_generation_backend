@@ -1805,7 +1805,7 @@ def compute_quantity(val):
         q = float(match.group())
         if q == 1:
             return 1
-        return math.ceil(q / 3) + 1
+        return math.ceil(q / 3)
     except (ValueError, TypeError):
         return 1
 
