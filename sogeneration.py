@@ -456,8 +456,8 @@ def process_fil_model(db, model, finish, quantity, index, reference,
                 "Cabinet Position":        reference,
                 "Order Lines / Quantity":  1,
             }
-            if customer_meta:
-                extra_row.update(customer_meta)
+            # if customer_meta:
+            #     extra_row.update(customer_meta)
             results.append(extra_row)
         processed_categories.add(category)
 
