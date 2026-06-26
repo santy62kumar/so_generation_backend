@@ -13,13 +13,7 @@ class Cabinet(Base):
     bom_line_4 = Column(String)   # ✅ new column added
     bom_line_5 = Column(String)
     bom_line_6 = Column(String)
-    bom_line_7 = Column(String)
-    bom_line_8 = Column(String)
-    bom_line_9 = Column(String)
-    bom_line_10 = Column(String)
-    bom_line_11 = Column(String)
-    bom_line_12 = Column(String)
-    bom_line_13 = Column(String)
+    
 
 
 class ColorCode(Base):

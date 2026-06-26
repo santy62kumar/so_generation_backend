@@ -267,7 +267,7 @@ def _flush_deferred_bom_rows(results):
         reference = row["reference"]
         quantity  = row["quantity"]
 
-        for i in range(1, 14):
+        for i in range(1, 7):
             bom = getattr(cabinet, f"bom_line_{i}")
             if bom:
                 product = f"{bom}-{tt_color}"
@@ -372,7 +372,7 @@ def process_mk_model(db, model, finish, quantity, index, reference,
         })
         return True  # cabinet row already appended, BOM deferred
 
-    for i in range(1, 14):
+    for i in range(1, 7):
         bom = getattr(cabinet, f"bom_line_{i}")
         if bom:
             product = f"{bom}-{effective_colour}"
@@ -712,7 +712,7 @@ async def handle_process_xlsx(file: UploadFile, db: Session):
                     #         prelam item (including ones processed before the LC
                     #         model appeared, e.g. C123) gets the correct suffix ──
                     colour_code = tt_color
-                    for i in range(1, 14):
+                    for i in range(1, 7):
                         bom = getattr(cabinet, f"bom_line_{i}")
                         if bom:
                             product = f"{bom}-{colour_code}" if colour_code else bom
