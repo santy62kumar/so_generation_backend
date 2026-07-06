@@ -55,6 +55,8 @@ PRELAM_FINISHES = {
     "Clear Glass (Prelam)",
     "Black Tinted Glass (Prelam)",
     "Clear Fluted Glass (Prelam)",
+    "Brown Tinted Glass (Prelam)",
+    "Brown Fluted Glass (Prelam)",
 }
 
 GLASS_SHUTTER_PROFILE_MAPPING = {
