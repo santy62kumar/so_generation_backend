@@ -40,6 +40,7 @@ TABLE_CONFIG: Dict[str, Dict[str, Any]] = {
             "bom_line_1", "bom_line_2", "bom_line_3",
             "bom_line_4", "bom_line_5", "bom_line_6",
         ],
+        "required": ["cabinet_code", "description"],
     },
     "colorcode": {
         "model": ColorCode,
@@ -138,6 +139,13 @@ def create_row(
     # Don't let the client set an autoincrement id explicitly on tables that have one
     if cfg["pk"] == "id":
         allowed_fields.pop("id", None)
+
+    missing = [
+        field for field in cfg.get("required", [])
+        if not str(allowed_fields.get(field, "") or "").strip()
+    ]
+    if missing:
+        raise HTTPException(status_code=422, detail=f"Missing required field(s): {', '.join(missing)}")
 
     new_row = model(**allowed_fields)
     db.add(new_row)
