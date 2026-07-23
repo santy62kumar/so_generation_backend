@@ -188,39 +188,6 @@ def get_pr_lines(cnt, total_light_length_mm):
 
     return lines
 
-# def get_psu_line(cnt):
-#     if 1 <= cnt <= 4:
-#         product, qty = "PSU2-2460", 1
-#     elif 5 <= cnt <= 6:
-#         product, qty = "PSU3-2465", 1
-#     elif 7 <= cnt <= 8:
-#         product, qty = "PSU2-2460", 2
-#     else:
-#         product, qty = "PSU3-2465", 2
-
-#     lines = [
-#         {
-#             "Order Lines/Product": product,
-#             "Order Lines/Description": product,
-#             "Order Lines / Quantity": qty,
-#         }
-#     ]
-
-#     # Add extra items if PSU qty > 1
-#     if cnt > 1:
-#         lines.append({
-#             "Order Lines/Product": "L-EC2",
-#             "Order Lines/Description": "L-EC2",
-#             "Order Lines / Quantity": 1,
-#         })
-
-#         lines.append({
-#             "Order Lines/Product": "PR-048",
-#             "Order Lines/Description": "PR-048",
-#             "Order Lines / Quantity": 1,
-#         })
-
-#     return lines
 
 
 # ── DB lookups ────────────────────────────────────────────────────────────────
@@ -302,6 +269,87 @@ def finalize_mk_processing(results, failed_rows):
                 "Reason":           "No colour code and no LC model found in sheet to derive tt_color",
             })
         deferred_bom_rows.clear()
+
+
+def process_mw_model(db, model, finish, quantity, index, reference,
+                     failed_rows, results, customer_meta=None,
+                     glass_shutter_found=None):
+    """Process an MW-* model.
+
+    Differences from process_mk_model:
+      - Description on the primary row is always "[MODEL]", never
+        cabinet.description.
+      - Non-prelam finish: only bom_line_i values starting with "P" get
+        expanded (product = f"{bom}-{effective_colour}").
+      - Prelam finish: only bom_line_i values starting with "G" get
+        expanded, with no colour suffix, and a two-line glass description
+        (GLASS PROFILE, then GLASS SHUTTER PROFILE).
+    """
+    cabinet = db.query(Cabinet).filter(Cabinet.cabinet_code == model).first()
+    if not cabinet:
+        failed_rows.append({
+            "Row": index + 1, "Model": model,
+            "Cabinet Position": reference,
+            "Reason": "Cabinet not found in DB",
+        })
+        return False
+
+    # ── MW primary row: description is always "[MODEL]" ──────────────────
+    first_row = {
+        "Order Lines/Product":     model,
+        "Order Lines/Description": f"[{model}]",
+        "Cabinet Position":        reference,
+        "Order Lines / Quantity":  quantity,
+    }
+    if customer_meta:
+        first_row.update(customer_meta)
+    results.append(first_row)
+
+    # ── Prelam finish → only "G"-prefixed BOM lines, no colour suffix ─────
+    if finish in PRELAM_FINISHES:
+        if not glass_shutter_found:
+            failed_rows.append({
+                "Row": index + 1, "Model": model,
+                "Cabinet Position": reference,
+                "Reason": "Prelam finish found but no glass-shutter profile model row exists in the sheet",
+            })
+            return True
+
+        glass_model   = glass_shutter_found[0]
+        profile_label = GLASS_SHUTTER_PROFILE_MAPPING.get(glass_model, glass_model)
+
+        for i in range(1, 7):
+            bom = getattr(cabinet, f"bom_line_{i}")
+            if bom and bom.startswith("G"):
+                product = bom  # no colour suffix
+                results.append({
+                    "Order Lines/Product":     product,
+                    "Order Lines/Description": f"[{product}]\nGLASS PROFILE: {finish}\n{profile_label}",
+                    "Cabinet Position":        reference,
+                    "Order Lines / Quantity":  quantity,
+                })
+        return True
+
+    # ── Non-prelam finish → only "P"-prefixed BOM lines get the colour code ─
+    colour_code = get_colour_code(db, finish, model, index, reference, failed_rows)
+    if not colour_code:
+        # primary row already appended; BOM skipped since colour wasn't found
+        return True
+
+    effective_colour = colour_code
+
+    for i in range(1, 7):
+        bom = getattr(cabinet, f"bom_line_{i}")
+        if bom and bom.startswith("P"):
+            product = f"{bom}-{effective_colour}"
+            results.append({
+                "Order Lines/Product":     product,
+                "Order Lines/Description": f"[{product}] ({finish})",
+                "Cabinet Position":        reference,
+                "Order Lines / Quantity":  quantity,
+            })
+
+    return True
 
 
 def process_mk_model(db, model, finish, quantity, index, reference,
@@ -486,7 +534,7 @@ def process_generic_model(db, model, quantity, index, reference,
 
 
 def process_row(db, model, finish, quantity, index, reference,
-                failed_rows, results, customer_meta, light_cabinet_count):
+                failed_rows, results, customer_meta, light_cabinet_count,glass_shutter_found=None):
     if model.startswith(("MK-", "CK-2.0")):
         if model in _MK_FIL_MODELS:
             return process_fil_model(db, model, finish, quantity, index, reference,
@@ -494,6 +542,12 @@ def process_row(db, model, finish, quantity, index, reference,
         return process_mk_model(db, model, finish, quantity, index, reference,
                                 failed_rows, results, customer_meta,
                                 light_cabinet_count=light_cabinet_count)
+
+    elif model.startswith("MW"):
+        return process_mw_model(db, model, finish, quantity, index, reference,
+                                failed_rows, results, customer_meta,
+                                glass_shutter_found=glass_shutter_found)
+
 
     elif model.startswith("FIL-"):
         return process_fil_model(db, model, finish, quantity, index, reference,
@@ -657,8 +711,12 @@ async def handle_process_xlsx(file: UploadFile, db: Session):
             }
 
         before_idx = len(results)
+
         success = process_row(db, model, finish, quantity, index, reference,
-                              failed_rows, results, customer_meta, light_cabinet_count)
+                              failed_rows, results, customer_meta, light_cabinet_count,
+                              glass_shutter_found=glass_shutter_found)
+        # success = process_row(db, model, finish, quantity, index, reference,
+        #                       failed_rows, results, customer_meta, light_cabinet_count)
 
         if success and not customer_written:
             customer_written = True
