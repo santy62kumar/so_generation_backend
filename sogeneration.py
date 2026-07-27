@@ -153,15 +153,46 @@ def build_glass_shutter_description(mk_product, glass_model, prelam_finish):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+# def compute_quantity(val):
+#     try:
+#         match = re.search(r"[\d.]+", str(val))
+#         if not match:
+#             return 1
+#         q = float(match.group())
+#         if q == 1:
+#             return 1
+#         return math.ceil(q / 3)
+#     except (ValueError, TypeError):
+#         return 1
+
+
+
+
 def compute_quantity(val):
     try:
-        match = re.search(r"[\d.]+", str(val))
+        text = str(val).strip()
+
+        if not text:
+            return 1
+
+        # Only a numerical value, e.g. 1, 2, 6.9, 16.37
+        if re.fullmatch(r"\d+(?:\.\d+)?", text):
+            number = float(text)
+
+            # Return whole numbers as integers
+            return int(number) if number.is_integer() else number
+
+        # Numerical value with a unit, e.g. "6.9 metre"
+        match = re.search(r"\d+(?:\.\d+)?", text)
+
         if not match:
             return 1
-        q = float(match.group())
-        if q == 1:
-            return 1
-        return math.ceil(q / 3)
+
+        quantity = float(match.group())
+
+        # Convert running length into 3-metre quantities
+        return math.ceil(quantity / 3)
+
     except (ValueError, TypeError):
         return 1
 
