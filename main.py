@@ -1,15 +1,16 @@
-
 import io
+import json
 import re
 import asyncio
 from typing import List, Optional
 from concurrent.futures import ThreadPoolExecutor
 
-from fastapi import FastAPI, UploadFile, File, Form, Depends
+from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from sqlalchemy.orm import Session
+from finish_routes import router as finish_router
 
 
 
@@ -26,6 +27,11 @@ from db_admin import router as db_admin_router
 
 import os
 from dotenv import load_dotenv
+
+from database import Base, engine
+from finish_models import Finish
+
+Base.metadata.create_all(bind=engine)
 
 
 load_dotenv()
@@ -48,6 +54,8 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(db_admin_router)
+
+app.include_router(finish_router)
 
 
 # ── Route 1: SO Generation ─────────────────────────────────────────────────────
@@ -78,11 +86,72 @@ async def generate_pdf_route(
     renderImage1: Optional[UploadFile] = File(default=None),
     renderImage2: Optional[UploadFile] = File(default=None),
     renderImage3: Optional[UploadFile] = File(default=None),
+    kitchenFinishImage: Optional[UploadFile] = File(default=None),
+    kitchenFinishColors: str                 = Form(default="{}"),
+    # Display names for whichever colors were selected, keyed the same as
+    # kitchenFinishColors (e.g. {"upperCabinet": "Abyss Edge"}). Sent
+    # alongside the composite "category:id" values so the PDF can print the
+    # finish name under each swatch without a DB round-trip.
+    kitchenFinishColorNames: str              = Form(default="{}"),
 ):
     layout_buffers = [await f.read() for f in layoutImage] if layoutImage else []
 
     async def read_optional(f):
         return await f.read() if f else None
+
+    # ── Kitchen Finish is now OPTIONAL as a whole. The reference image is
+    # what unlocks color selection: if no image was uploaded, we ignore any
+    # color payload entirely and skip the slide. If an image *was* uploaded,
+    # the user must have picked between 2 and 8 of the 8 possible finish
+    # categories (any subset — none of the 8 keys are individually
+    # required). Enforced here too since the frontend check can be
+    # bypassed. ──
+    ALL_FINISH_KEYS = [
+        "lowerCabinet", "upperCabinet", "loftUnit", "glassColor",
+        "golaColor", "skirtingColor", "openShelf", "tallTower",
+    ]
+
+    try:
+        finish_colors = json.loads(kitchenFinishColors) or {}
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="kitchenFinishColors must be valid JSON.")
+
+    try:
+        finish_color_names = json.loads(kitchenFinishColorNames) or {}
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="kitchenFinishColorNames must be valid JSON.")
+
+    kitchen_finish_image_bytes = None
+
+    if kitchenFinishImage is not None:
+        kitchen_finish_image_bytes = await kitchenFinishImage.read()
+        if not kitchen_finish_image_bytes:
+            raise HTTPException(status_code=400, detail="The uploaded kitchen finish image is empty.")
+
+        # Only count real selections against the known 8 keys — stray keys
+        # in the JSON payload are ignored rather than trusted.
+        selected_keys = [k for k in ALL_FINISH_KEYS if finish_colors.get(k)]
+
+        if len(selected_keys) < 2:
+            raise HTTPException(
+                status_code=400,
+                detail="Select at least 2 kitchen finish colors when uploading a reference image.",
+            )
+        if len(selected_keys) > 8:
+            raise HTTPException(
+                status_code=400,
+                detail="You can select at most 8 kitchen finish colors.",
+            )
+
+        # Keep only the selected keys (and their matching names) going
+        # forward, so downstream code never has to re-check truthiness.
+        finish_colors = {k: finish_colors[k] for k in selected_keys}
+        finish_color_names = {k: finish_color_names.get(k, "") for k in selected_keys}
+    else:
+        # No reference image → no finish slide at all, regardless of what
+        # (if anything) was sent in kitchenFinishColors.
+        finish_colors = {}
+        finish_color_names = {}
 
     dynamic_data = {
         "title":        title,
@@ -93,6 +162,9 @@ async def generate_pdf_route(
         "renderImage1": await read_optional(renderImage1),
         "renderImage2": await read_optional(renderImage2),
         "renderImage3": await read_optional(renderImage3),
+        "kitchenFinishImage":      kitchen_finish_image_bytes,
+        "kitchenFinishColors":     finish_colors,
+        "kitchenFinishColorNames": finish_color_names,
         "relationName":  relationName,
         "relationPhone": relationPhone,
         "relationEmail": relationEmail,
