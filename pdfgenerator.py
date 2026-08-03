@@ -419,18 +419,20 @@ SLIDES: list[dict] = [
     # Slide 5 – Layout plan (dynamic grid)
     {"asset": "6.jpg",  "build": _build_slide_6},
 
-    # Slides 6-9 – Render images (1 per page, skipped if not uploaded)
-    _make_render_slide("renderImage0"),
-    _make_render_slide("renderImage1"),
-    _make_render_slide("renderImage2"),
-    _make_render_slide("renderImage3"),
-
-    # Slide — Kitchen Color Finishes Used. Optional: only appears if a
+    # Slide 6 – Kitchen Color Finishes Used. Optional: only appears if a
     # reference image was uploaded and 2-8 finish colors were selected.
+    # This slide now appears immediately after the Layout Plan and before
+    # all render-image slides.
     # Background asset is picked dynamically — assets/Finishes_image_<n>.jpg
     # for n = number of colors selected (2..8), matching the frontend's
     # slide-backgrounds/Finishes_image_<n>.jpg preview files.
     {"asset": kitchen_finish_asset, "build": _build_kitchen_finish_slide},
+
+    # Slides 7-10 – Render images (1 per page, skipped if not uploaded)
+    _make_render_slide("renderImage0"),
+    _make_render_slide("renderImage1"),
+    _make_render_slide("renderImage2"),
+    _make_render_slide("renderImage3"),
 
     # Slide 10 – Static
     {"asset": "8.jpg",  "build": lambda d: ""},
