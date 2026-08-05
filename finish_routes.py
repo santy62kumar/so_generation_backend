@@ -28,7 +28,7 @@ router = APIRouter(
     tags=["Finishes"],
 )
 
-FinishCategory = Literal["cabinet", "glass", "skirting", "open-shelf", "gola"]
+FinishCategory = Literal["cabinet", "glass", "skirting", "open-shelf", "handle-profile", "gola"]
 
 MAX_IMAGE_SIZE = 15 * 1024 * 1024  # 15 MB
 

@@ -108,7 +108,7 @@ async def generate_pdf_route(
     # bypassed. ──
     ALL_FINISH_KEYS = [
         "lowerCabinet", "upperCabinet", "loftUnit", "glassColor",
-        "golaColor", "skirtingColor", "openShelf", "tallTower",
+        "golaColor", "skirtingColor", "openShelf", "tallTower", "handleProfile",
     ]
 
     try:

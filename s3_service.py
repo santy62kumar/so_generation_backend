@@ -48,6 +48,7 @@ ALLOWED_CATEGORIES = {
     "gola",
     "skirting",
     "open-shelf",
+    "handle-profile",
 }
 
 CONTENT_TYPE_EXTENSIONS = {

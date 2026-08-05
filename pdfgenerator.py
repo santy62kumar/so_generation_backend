@@ -175,6 +175,7 @@ KITCHEN_FINISH_ITEMS = [
     ("skirtingColor", "Skirting Color"),
     ("openShelf",     "Open Shelf"),
     ("tallTower",     "Tall Tower"),
+    ("handleProfile", "Handle Profile"),
 ]
 
 
@@ -241,6 +242,7 @@ CIRCLE_BORDER_WIDTH = 3
 SWATCH_BACKGROUND_SIZE = {
     "golaColor": "170%",
     "skirtingColor": "170%",
+    "handleProfile": "170%",
 }
 DEFAULT_SWATCH_BACKGROUND_SIZE = "cover"
 
