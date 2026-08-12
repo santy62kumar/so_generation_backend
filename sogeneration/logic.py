@@ -42,6 +42,7 @@ from .constants.mapping import (
     PRELAM_FINISHES,
     PSU_CABINETS_PER_UNIT,
     PSU_PRODUCT,
+    REQUIRE_ALL_SKIRTINGS,
     SERVICE_CHARGE_PRODUCT,
     SHUTTER_FINISH_MAPPING,
     SKIP_DUPLICATE_SKIRTING,
@@ -81,14 +82,24 @@ def _norm(code):
     return re.sub(r"\s+", "", str(code)).upper()
 
 
+def _as_list(value):
+    """Accept either a single code or a list of codes in the mappings."""
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return list(value)
+    return [value]
+
+
 # Pre-normalised lookups, built once at import time from the static mappings.
-_GOLA_BY_MODEL = {_norm(k): v for k, v in GOLA_TO_SKIRTING.items()}
+# Values are always lists, so a gola may map to one skirting or several.
+_GOLA_BY_MODEL = {_norm(k): _as_list(v) for k, v in GOLA_TO_SKIRTING.items()}
 _ODOO_BY_INFURNIA = {_norm(k): v for k, v in INFURNIA_TO_ODOO.items()}
 
 # Reverse safety net: if `model` arrives in some other form but its resolved
 # odoo_code is a known gola odoo_code, we can still find the skirting.
 _GOLA_BY_ODOO = {
-    _norm(INFURNIA_TO_ODOO[gola]): skirting
+    _norm(INFURNIA_TO_ODOO[gola]): _as_list(skirting)
     for gola, skirting in GOLA_TO_SKIRTING.items()
     if gola in INFURNIA_TO_ODOO
 }
@@ -501,12 +512,18 @@ def process_fil_model(db, model, finish, quantity, index, reference,
 
 # ── Gola → skirting resolution ────────────────────────────────────────────────
 
+def get_skirting_models(model, odoo_code=None):
+    """Return the list of skirting infurnia codes for a gola code (may be empty)."""
+    skirtings = _GOLA_BY_MODEL.get(_norm(model))
+    if not skirtings and odoo_code:
+        skirtings = _GOLA_BY_ODOO.get(_norm(odoo_code))
+    return list(skirtings or [])
+
+
+# Backwards-compatible alias: returns only the first mapped skirting.
 def get_skirting_model(model, odoo_code=None):
-    """Return the skirting infurnia code for a gola code, else None."""
-    skirting = _GOLA_BY_MODEL.get(_norm(model))
-    if not skirting and odoo_code:
-        skirting = _GOLA_BY_ODOO.get(_norm(odoo_code))
-    return skirting
+    skirtings = get_skirting_models(model, odoo_code)
+    return skirtings[0] if skirtings else None
 
 
 def check_gola_skirtings(df, failed_rows):
@@ -526,38 +543,50 @@ def check_gola_skirtings(df, failed_rows):
         if m:
             present.add(_norm(m))
 
-    missing = {}      # normalised gola code -> (row number, reference, model, skirting)
+    missing = {}      # normalised gola code -> (row number, reference, model, [skirtings])
 
     for index, row in df.iterrows():
         model = normalize_text(row["Model"])
         if not model:
             continue
 
-        skirting = _GOLA_BY_MODEL.get(_norm(model))
-        if not skirting:
+        skirtings = _GOLA_BY_MODEL.get(_norm(model))
+        if not skirtings:
             continue      # not a gola profile
 
-        # The skirting may be punched under its infurnia code or its odoo code.
-        skirting_forms = {_norm(skirting)}
-        odoo = INFURNIA_TO_ODOO.get(skirting)
-        if odoo:
-            skirting_forms.add(_norm(odoo))
+        # A skirting counts as punched under its infurnia code or its odoo code.
+        def _is_punched(skirting):
+            forms = {_norm(skirting)}
+            odoo = INFURNIA_TO_ODOO.get(skirting)
+            if odoo:
+                forms.add(_norm(odoo))
+            return bool(forms & present)
 
-        if skirting_forms & present:
-            continue      # skirting is punched — nothing to report
+        absent = [s for s in skirtings if not _is_punched(s)]
 
-        # Record the first row that needs this skirting.
+        if REQUIRE_ALL_SKIRTINGS:
+            if not absent:
+                continue          # every mapped skirting is punched
+        else:
+            if len(absent) < len(skirtings):
+                continue          # at least one mapped skirting is punched
+            # none punched — report the full list of acceptable codes
+            absent = list(skirtings)
+
+        # Record the first row that needs these skirtings.
         key = _norm(model)
         if key not in missing:
-            missing[key] = (index + 1, row["Reference"], model, skirting)
+            missing[key] = (index + 1, row["Reference"], model, absent)
 
     if FLAG_MISSING_SKIRTING:
-        for row_no, reference, model, skirting in missing.values():
+        joiner = " and " if REQUIRE_ALL_SKIRTINGS else " or "
+        for row_no, reference, model, absent in missing.values():
+            names = joiner.join(f"'{s}'" for s in absent)
             failed_rows.append({
                 "Row":              row_no,
                 "Model":            model,
                 "Cabinet Position": reference,
-                "Reason":           f"Gola '{model}' is punched: its skirting '{skirting}' is missing from the sheet",
+                "Reason":           f"Gola '{model}' is punched: its skirting {names} is missing from the sheet",
             })
 
     return set(missing.keys())
@@ -654,36 +683,42 @@ def process_generic_model(db, model, quantity, index, reference,
     # ------------------------------------------------------------------
     # Gola profiles always ship with their matching skirting seal.
     # ------------------------------------------------------------------
-    skirting_model = get_skirting_model(model, odoo_code)
-    if skirting_model and AUTO_ADD_SKIRTING:
-        skirting_odoo = resolve_skirting_odoo_code(db, skirting_model, index, reference)
+    skirting_models = get_skirting_models(model, odoo_code)
+    if skirting_models and AUTO_ADD_SKIRTING:
+        # With several acceptable skirtings and none punched, only the first is
+        # auto-added unless every one is required.
+        if not REQUIRE_ALL_SKIRTINGS:
+            skirting_models = skirting_models[:1]
 
-        if not skirting_odoo:
-            failed_rows.append({
-                "Row":              index + 1,
-                "Model":            skirting_model,
-                "Cabinet Position": reference,
-                "Reason":           f"Skirting odoo_code not found for gola '{model}'",
-            })
-            return True  # the gola line itself is valid, keep it
+        for skirting_model in skirting_models:
+            skirting_odoo = resolve_skirting_odoo_code(db, skirting_model, index, reference)
 
-        already_present = SKIP_DUPLICATE_SKIRTING and any(
-            r.get("Order Lines/Product") == skirting_odoo
-            and r.get("Cabinet Position") == reference
-            for r in results
-        )
+            if not skirting_odoo:
+                failed_rows.append({
+                    "Row":              index + 1,
+                    "Model":            skirting_model,
+                    "Cabinet Position": reference,
+                    "Reason":           f"Skirting odoo_code not found for gola '{model}'",
+                })
+                continue      # the gola line itself is valid, keep it
 
-        if not already_present:
-            skirting_row = {
-                "Order Lines/Product":     skirting_odoo,
-                "Order Lines/Description": f"[{skirting_odoo}]",
-                "Cabinet Position":        reference,
-                "Order Lines / Quantity":  quantity * SKIRTING_QTY_RATIO,
-            }
-            if customer_meta:
-                skirting_row.update(customer_meta)
+            already_present = SKIP_DUPLICATE_SKIRTING and any(
+                r.get("Order Lines/Product") == skirting_odoo
+                and r.get("Cabinet Position") == reference
+                for r in results
+            )
 
-            results.append(skirting_row)
+            if not already_present:
+                skirting_row = {
+                    "Order Lines/Product":     skirting_odoo,
+                    "Order Lines/Description": f"[{skirting_odoo}]",
+                    "Cabinet Position":        reference,
+                    "Order Lines / Quantity":  quantity * SKIRTING_QTY_RATIO,
+                }
+                if customer_meta:
+                    skirting_row.update(customer_meta)
+
+                results.append(skirting_row)
 
     return True
 

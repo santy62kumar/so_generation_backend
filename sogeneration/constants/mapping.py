@@ -125,15 +125,22 @@ FILLER_EXTRA_FINISH = "Glacier Veil Matte"
 
 
 # ── Gola → skirting mapping (Sheet1) ──────────────────────────────────────────
+# A value may be a single code, or a list when more than one skirting is valid
+# for the same gola. See REQUIRE_ALL_SKIRTINGS below for how lists are treated.
 
 GOLA_TO_SKIRTING = {
     "HG3L-AT": "PVCSE-10-AT-30",
     "HG3L-BG": "PVCSE-10-BG-30",
-    "HG3L-SF": "PVCSE-10-BF-30",
+    "HG3L-SF": ["PVCSE-10-BF-30", "PVCSE-10-BL-30"],
     "9299225": "PVCSE-10-BL-30",
     "9345616": "PVCSE-10-SL-30",
     "9345615": "PVCSE-10-BF-30",
 }
+
+# How a list of skirtings is read:
+#   False = any one of them satisfies the gola (alternatives)
+#   True  = every one of them must be punched (a set that ships together)
+REQUIRE_ALL_SKIRTINGS = False
 
 # ── Infurnia code → odoo_code (Sheet2) ────────────────────────────────────────
 # Used only as a fallback when the DB lookup does not resolve the code.
