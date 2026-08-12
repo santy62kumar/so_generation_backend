@@ -545,6 +545,142 @@ def process_fil_model(db, model, finish, quantity, index, reference,
     return True
 
 
+
+# ---------------------------------------------------------------------------
+# Gola  ->  skirting mapping  (Sheet1)
+# ---------------------------------------------------------------------------
+GOLA_TO_SKIRTING = {
+    "HG3L-AT": "PVCSE-10-AT-30",
+    "HG3L-BG": "PVCSE-10-BG-30",
+    "HG3L-SF": "PVCSE-10-BF-30",
+    "9299225": "PVCSE-10-BL-30",
+    "9345616": "PVCSE-10-SL-30",
+    "9345615": "PVCSE-10-BF-30",
+}
+
+# ---------------------------------------------------------------------------
+# Infurnia code -> odoo_code  (Sheet2)
+# Used only as a fallback when the DB lookup does not resolve the code.
+# ---------------------------------------------------------------------------
+INFURNIA_TO_ODOO = {
+    # gola profiles
+    "HG3L-AT": "HW-0981",
+    "HG3L-BG": "HW-0272",
+    "HG3L-SF": "PR-119",
+    "9299225": "PR-028",
+    "9345616": "PR-105",
+    "9345615": "PR-104",
+    # skirting seals
+    "PVCSE-10-AT-30": "HW-0861",
+    "PVCSE-10-BG-30": "HW-0880",
+    "PVCSE-10-BF-30": "HW-0872",
+    "PVCSE-10-BL-30": "HW-0846",
+    "PVCSE-10-SL-30": "HW-0857",
+}
+
+# 1 skirting line per 1 gola line. Change if the ratio is not 1:1.
+SKIRTING_QTY_RATIO = 1
+
+# Do not add a skirting line if an identical one already exists for the
+# same cabinet position (e.g. the input already carried it explicitly).
+SKIP_DUPLICATE_SKIRTING = True
+
+
+def _norm(code):
+    """Normalise a product code: strip all whitespace, upper-case.
+
+    Handles the inconsistent spacing in the source sheets, e.g. 'PR -119'
+    and 'PR-119' both normalise to 'PR-119'.
+    """
+    if code is None:
+        return ""
+    return re.sub(r"\s+", "", str(code)).upper()
+
+
+# Pre-normalised lookups, built once at import time.
+_GOLA_BY_MODEL = {_norm(k): v for k, v in GOLA_TO_SKIRTING.items()}
+_ODOO_BY_INFURNIA = {_norm(k): v for k, v in INFURNIA_TO_ODOO.items()}
+
+# Reverse safety net: if `model` arrives in some other form but its resolved
+# odoo_code is a known gola odoo_code, we can still find the skirting.
+_GOLA_BY_ODOO = {
+    _norm(INFURNIA_TO_ODOO[gola]): skirting
+    for gola, skirting in GOLA_TO_SKIRTING.items()
+    if gola in INFURNIA_TO_ODOO
+}
+
+
+def get_skirting_model(model, odoo_code=None):
+    """Return the skirting infurnia code for a gola code, else None."""
+    skirting = _GOLA_BY_MODEL.get(_norm(model))
+    if not skirting and odoo_code:
+        skirting = _GOLA_BY_ODOO.get(_norm(odoo_code))
+    return skirting
+
+
+def resolve_skirting_odoo_code(db, skirting_model, index, reference):
+    """Resolve the skirting odoo_code: DB first, static sheet as fallback."""
+    probe_failures = []          # keep DB misses out of the real failed_rows
+    odoo_code = get_odoo_code(db, skirting_model, index, reference, probe_failures)
+    if odoo_code:
+        return odoo_code
+    return _ODOO_BY_INFURNIA.get(_norm(skirting_model))
+
+
+def process_generic_model(db, model, quantity, index, reference,
+                          failed_rows, results, customer_meta=None):
+    odoo_code = get_odoo_code(db, model, index, reference, failed_rows)
+    if not odoo_code:
+        return False
+
+    first_row = {
+        "Order Lines/Product":     odoo_code,
+        "Order Lines/Description": f"[{odoo_code}]",
+        "Cabinet Position":        reference,
+        "Order Lines / Quantity":  quantity,
+    }
+    if customer_meta:
+        first_row.update(customer_meta)
+
+    results.append(first_row)
+
+    # ------------------------------------------------------------------
+    # Gola profiles always ship with their matching skirting seal.
+    # ------------------------------------------------------------------
+    skirting_model = get_skirting_model(model, odoo_code)
+    if skirting_model:
+        skirting_odoo = resolve_skirting_odoo_code(db, skirting_model, index, reference)
+
+        if not skirting_odoo:
+            failed_rows.append({
+                "index":     index,
+                "reference": reference,
+                "model":     skirting_model,
+                "reason":    f"Skirting odoo_code not found for gola '{model}'",
+            })
+            return True  # the gola line itself is valid, keep it
+
+        already_present = SKIP_DUPLICATE_SKIRTING and any(
+            r.get("Order Lines/Product") == skirting_odoo
+            and r.get("Cabinet Position") == reference
+            for r in results
+        )
+
+        if not already_present:
+            skirting_row = {
+                "Order Lines/Product":     skirting_odoo,
+                "Order Lines/Description": f"[{skirting_odoo}]",
+                "Cabinet Position":        reference,
+                "Order Lines / Quantity":  quantity * SKIRTING_QTY_RATIO,
+            }
+            if customer_meta:
+                skirting_row.update(customer_meta)
+
+            results.append(skirting_row)
+
+    return True
+
+
 def process_generic_model(db, model, quantity, index, reference,
                           failed_rows, results, customer_meta=None):
     odoo_code = get_odoo_code(db, model, index, reference, failed_rows)

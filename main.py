@@ -17,7 +17,9 @@ from finish_routes import router as finish_router
 
 
 from database import get_db
-from sogeneration import handle_process_xlsx
+# from sogeneration import handle_process_xlsx
+from sogeneration.logic import handle_process_xlsx
+
 from pdfgenerator import generate_pdf_sync          # ← sync wrapper, not generate_pdf
 from warrantygenerator import generate_warranty_pdf_sync 
 from installation_report_generator import generate_installation_report_sync   # ← NEW
