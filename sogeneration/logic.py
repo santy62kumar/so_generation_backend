@@ -299,6 +299,34 @@ def finalize_mk_processing(results, failed_rows):
 
 # ── Condition processors ──────────────────────────────────────────────────────
 
+AD_SUFFIX = "-AD"
+AD_DESCRIPTION = "Glacier Veil Matte"
+
+
+def _is_ad_part(bom):
+    """True for BOM lines like 'P1818-AA-AD' — 'P' prefix + '-AD' suffix."""
+    return bool(bom) and bom.startswith("P") and bom.strip().upper().endswith(AD_SUFFIX)
+
+
+def _append_ad_rows(cabinet, reference, quantity, results):
+    """Append every P*-AD bom line as-is with the fixed Glacier Veil Matte
+    description. Applies to BOTH prelam and non-prelam finishes, and the
+    product code is never given a colour suffix.
+    """
+    added = []
+    for i in range(1, 7):
+        bom = getattr(cabinet, f"bom_line_{i}")
+        if _is_ad_part(bom):
+            results.append({
+                "Order Lines/Product":     bom,
+                "Order Lines/Description": f"[{bom}] {AD_DESCRIPTION}",
+                "Cabinet Position":        reference,
+                "Order Lines / Quantity":  quantity,
+            })
+            added.append(bom)
+    return added
+
+
 def process_mw_model(db, model, finish, quantity, index, reference,
                      failed_rows, results, customer_meta=None,
                      glass_shutter_found=None):
@@ -307,8 +335,11 @@ def process_mw_model(db, model, finish, quantity, index, reference,
     Differences from process_mk_model:
       - Description on the primary row is always "[MODEL]", never
         cabinet.description.
-      - Non-prelam finish: only bom_line_i values starting with "P" get
-        expanded (product = f"{bom}-{effective_colour}").
+      - Any bom_line_i starting with "P" AND ending with "-AD" is emitted
+        as-is (no colour suffix) with the description
+        "[part_code] Glacier Veil Matte", regardless of finish type.
+      - Non-prelam finish: the remaining bom_line_i values starting with "P"
+        get expanded (product = f"{bom}-{effective_colour}").
       - Prelam finish: only bom_line_i values starting with "G" get
         expanded, with no colour suffix, and a two-line glass description
         (GLASS PROFILE, then GLASS SHUTTER PROFILE).
@@ -332,6 +363,9 @@ def process_mw_model(db, model, finish, quantity, index, reference,
     if customer_meta:
         first_row.update(customer_meta)
     results.append(first_row)
+
+    # ── P*-AD lines: fixed finish, added as-is for both finish types ─────
+    _append_ad_rows(cabinet, reference, quantity, results)
 
     # ── Prelam finish → only "G"-prefixed BOM lines, no colour suffix ─────
     if finish in PRELAM_FINISHES:
@@ -361,14 +395,14 @@ def process_mw_model(db, model, finish, quantity, index, reference,
     # ── Non-prelam finish → only "P"-prefixed BOM lines get the colour code ─
     colour_code = get_colour_code(db, finish, model, index, reference, failed_rows)
     if not colour_code:
-        # primary row already appended; BOM skipped since colour wasn't found
+        # primary row + AD rows already appended; BOM skipped since colour wasn't found
         return True
 
     effective_colour = colour_code
 
     for i in range(1, 7):
         bom = getattr(cabinet, f"bom_line_{i}")
-        if bom and bom.startswith("P"):
+        if bom and bom.startswith("P") and not _is_ad_part(bom):
             product = f"{bom}-{effective_colour}"
             results.append({
                 "Order Lines/Product":     product,
@@ -378,6 +412,86 @@ def process_mw_model(db, model, finish, quantity, index, reference,
             })
 
     return True
+
+# def process_mw_model(db, model, finish, quantity, index, reference,
+#                      failed_rows, results, customer_meta=None,
+#                      glass_shutter_found=None):
+#     """Process an MW-* model.
+
+#     Differences from process_mk_model:
+#       - Description on the primary row is always "[MODEL]", never
+#         cabinet.description.
+#       - Non-prelam finish: only bom_line_i values starting with "P" get
+#         expanded (product = f"{bom}-{effective_colour}").
+#       - Prelam finish: only bom_line_i values starting with "G" get
+#         expanded, with no colour suffix, and a two-line glass description
+#         (GLASS PROFILE, then GLASS SHUTTER PROFILE).
+#     """
+#     cabinet = db.query(Cabinet).filter(Cabinet.cabinet_code == model).first()
+#     if not cabinet:
+#         failed_rows.append({
+#             "Row": index + 1, "Model": model,
+#             "Cabinet Position": reference,
+#             "Reason": "Cabinet not found in DB",
+#         })
+#         return False
+
+#     # ── MW primary row: description is always "[MODEL]" ──────────────────
+#     first_row = {
+#         "Order Lines/Product":     model,
+#         "Order Lines/Description": f"[{model}]",
+#         "Cabinet Position":        reference,
+#         "Order Lines / Quantity":  quantity,
+#     }
+#     if customer_meta:
+#         first_row.update(customer_meta)
+#     results.append(first_row)
+
+#     # ── Prelam finish → only "G"-prefixed BOM lines, no colour suffix ─────
+#     if finish in PRELAM_FINISHES:
+#         if not glass_shutter_found:
+#             failed_rows.append({
+#                 "Row": index + 1, "Model": model,
+#                 "Cabinet Position": reference,
+#                 "Reason": "Prelam finish found but no glass-shutter profile model row exists in the sheet",
+#             })
+#             return True
+
+#         glass_model   = glass_shutter_found[0]
+#         profile_label = GLASS_SHUTTER_PROFILE_MAPPING.get(glass_model, glass_model)
+
+#         for i in range(1, 7):
+#             bom = getattr(cabinet, f"bom_line_{i}")
+#             if bom and bom.startswith("G"):
+#                 product = bom  # no colour suffix
+#                 results.append({
+#                     "Order Lines/Product":     product,
+#                     "Order Lines/Description": f"[{product}]\nGLASS PROFILE: {finish}\n{profile_label}",
+#                     "Cabinet Position":        reference,
+#                     "Order Lines / Quantity":  quantity,
+#                 })
+#         return True
+
+#     # ── Non-prelam finish → only "P"-prefixed BOM lines get the colour code ─
+#     colour_code = get_colour_code(db, finish, model, index, reference, failed_rows)
+#     if not colour_code:
+#         # primary row already appended; BOM skipped since colour wasn't found
+#         return True
+
+#     effective_colour = colour_code
+
+#     for i in range(1, 7):
+#         bom = getattr(cabinet, f"bom_line_{i}")
+#         if bom and bom.startswith("P"):
+#             product = f"{bom}-{effective_colour}"
+#             results.append({
+#                 "Order Lines/Product":     product,
+#                 "Order Lines/Description": f"[{product}] ({finish})",
+#                 "Cabinet Position":        reference,
+#                 "Order Lines / Quantity":  quantity,
+#             })
+
+#     return True
 
 
 def process_mk_model(db, model, finish, quantity, index, reference,
