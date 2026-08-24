@@ -1,0 +1,31 @@
+# Direct dependencies only — pip resolves the rest.
+# The previous file was a `pip freeze` dump, so ~20 transitive packages
+# (numpy, starlette, botocore, six, tzdata, …) were pinned as if they were
+# ours, which makes every upgrade a manual diff.
+#
+# For a byte-reproducible deploy, lock separately:
+#   pip install -r requirements.txt && pip freeze > requirements.lock.txt
+
+# ── Web ───────────────────────────────────────────────────────────────────────
+fastapi==0.128.7
+uvicorn[standard]==0.40.0
+pydantic==2.12.5
+python-multipart==0.0.22        # multipart/form-data uploads
+python-dotenv==1.2.1
+
+# ── Database ──────────────────────────────────────────────────────────────────
+SQLAlchemy==2.0.46
+psycopg2-binary==2.9.11
+
+# ── Spreadsheets ──────────────────────────────────────────────────────────────
+pandas==3.0.0
+openpyxl==3.1.5
+
+# ── PDF rendering ─────────────────────────────────────────────────────────────
+# playwright also needs its browser:  playwright install chromium-headless-shell
+playwright==1.59.0
+pypdf==6.11.0
+pillow==12.2.0
+
+# ── AWS ───────────────────────────────────────────────────────────────────────
+boto3==1.43.58

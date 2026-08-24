@@ -1,0 +1,1 @@
+"""SO Generator backend application."""
